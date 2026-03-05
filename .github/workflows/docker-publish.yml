@@ -5,6 +5,10 @@ on:
     branches: [main]
     tags: ["v*"]
 
+permissions:
+  contents: read
+  packages: write
+
 env:
   REGISTRY: ghcr.io
   IMAGE_NAME: ${{ github.repository }}
@@ -12,10 +16,6 @@ env:
 jobs:
   build-and-push:
     runs-on: ubuntu-latest
-
-    permissions:
-      contents: read
-      packages: write
 
     steps:
       - name: Checkout
