@@ -1,0 +1,11 @@
+{% if models %}
+<div class="space-y-1">
+    {% for model in models %}
+    <div class="flex items-center justify-between py-1 px-2 text-sm rounded hover:bg-gray-50 {{ 'border-t' if not loop.first }}">
+        <span class="font-mono text-gray-800">{{ model }}</span>
+    </div>
+    {% endfor %}
+</div>
+{% else %}
+<p class="text-sm text-gray-400 text-center py-2">No models found.</p>
+{% endif %}

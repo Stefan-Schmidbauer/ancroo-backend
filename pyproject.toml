@@ -1,0 +1,13 @@
+[project]
+name = "ancroo-backend"
+version = "0.1.0"
+description = "AI Workflow Runner — Backend"
+requires-python = ">=3.11"
+license = "AGPL-3.0-only"
+authors = [
+    { name = "Stefan Schmidbauer", email = "Stefan-Schmidbauer@users.noreply.github.com" },
+]
+readme = "README.md"
+
+[project.urls]
+Repository = "https://github.com/Stefan-Schmidbauer/ancroo-backend"

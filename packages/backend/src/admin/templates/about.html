@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+{% block title %}Ancroo Admin — About{% endblock %}
+
+{% block content %}
+<div class="max-w-lg mx-auto">
+    <div class="text-center py-6">
+        <img src="/static/ancroo.png" alt="Ancroo" class="w-20 h-20 mx-auto rounded-2xl shadow-md mb-3">
+        <h2 class="text-lg font-semibold text-gray-900">{{ name }}</h2>
+        <p class="text-sm text-gray-500 mt-1">{{ description }}</p>
+    </div>
+
+    <div class="bg-white rounded-lg border divide-y">
+        <div class="flex justify-between px-4 py-3">
+            <span class="text-sm text-gray-500">Version</span>
+            <span class="text-sm font-mono text-gray-900">{{ version }}</span>
+        </div>
+        <div class="flex justify-between px-4 py-3">
+            <span class="text-sm text-gray-500">Build</span>
+            <span class="text-sm font-mono text-gray-900">{{ commit }}</span>
+        </div>
+        <div class="flex justify-between px-4 py-3">
+            <span class="text-sm text-gray-500">Author</span>
+            <span class="text-sm text-gray-900">{{ author }}</span>
+        </div>
+        <div class="flex justify-between px-4 py-3">
+            <span class="text-sm text-gray-500">License</span>
+            <span class="text-sm text-gray-900">{{ license }}</span>
+        </div>
+        <div class="flex justify-between px-4 py-3">
+            <span class="text-sm text-gray-500">Repository</span>
+            <a href="{{ repository }}" target="_blank" rel="noopener noreferrer"
+               class="text-sm text-blue-600 hover:text-blue-700">
+                {{ repository }}
+            </a>
+        </div>
+    </div>
+
+    <p class="text-xs text-gray-400 text-center mt-4">
+        Built with the help of AI (Claude by Anthropic)
+    </p>
+</div>
+{% endblock %}

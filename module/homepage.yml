@@ -1,0 +1,9 @@
+# Ancroo Dashboard Widget
+- Automation:
+    - Ancroo:
+        icon: mdi-anchor
+        href: http://${HOST_IP}:${ANCROO_PORT}/admin
+        description: AI Workflow Runner for your Browser
+        siteMonitor: http://ancroo-backend:8000/health
+        server: local
+        container: ancroo-backend

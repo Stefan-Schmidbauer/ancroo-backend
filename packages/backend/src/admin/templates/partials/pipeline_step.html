@@ -1,0 +1,36 @@
+<!-- Single pipeline step partial (for HTMX dynamic insertion) -->
+<div class="border rounded-lg p-3 mb-2 bg-gray-50">
+    <div class="flex items-center justify-between mb-2">
+        <span class="text-xs font-semibold text-gray-500">Step {{ step_index + 1 }}: {{ step_type | upper }}</span>
+        <button type="button" class="text-xs text-red-400 hover:text-red-600" title="Remove">&times;</button>
+    </div>
+    {% if step_type == 'llm' %}
+    <div class="mb-2">
+        <label class="block text-xs text-gray-500 mb-1">Model</label>
+        <select class="w-full border rounded px-2 py-1.5 text-sm bg-white">
+            <option value="">Select model...</option>
+            {% for model in models %}
+            <option value="{{ model }}">{{ model }}</option>
+            {% endfor %}
+        </select>
+    </div>
+    <div class="mb-2">
+        <label class="block text-xs text-gray-500 mb-1">Prompt Template</label>
+        <textarea class="w-full border rounded px-2 py-1.5 text-sm font-mono bg-white" rows="4"
+            placeholder="Fix grammar: &#123;&#123;text&#125;&#125;"></textarea>
+    </div>
+    <div>
+        <label class="block text-xs text-gray-500 mb-1">Temperature: 0.3</label>
+        <input type="range" min="0" max="1" step="0.1" value="0.3" class="w-full">
+    </div>
+    {% elif step_type == 'transform' %}
+    <div>
+        <label class="block text-xs text-gray-500 mb-1">Operation</label>
+        <select class="w-full border rounded px-2 py-1.5 text-sm bg-white">
+            <option value="trim">Trim whitespace</option>
+            <option value="uppercase">Uppercase</option>
+            <option value="lowercase">Lowercase</option>
+        </select>
+    </div>
+    {% endif %}
+</div>

@@ -1,0 +1,201 @@
+{% extends "base.html" %}
+{% block title %}Ancroo Admin - {{ 'Edit ' + workflow.name if workflow else 'New Workflow' }}{% endblock %}
+
+{% block content %}
+<div class="max-w-3xl">
+    <h1 class="text-lg font-semibold text-gray-900 mb-4">
+        {{ 'Edit Workflow' if edit_mode else 'New Workflow' }}
+    </h1>
+
+    <form method="post" action="{{ '/admin/workflows/' + workflow.slug + '/update' if edit_mode else '/admin/workflows' }}" id="workflow-form">
+        <!-- Basic Info -->
+        <div class="bg-white rounded-lg border p-4 mb-4">
+            <h2 class="text-sm font-semibold text-gray-700 mb-3">Basic Info</h2>
+
+            <div class="mb-3">
+                <label class="block text-sm text-gray-600 mb-1">Name</label>
+                <input type="text" name="name" required
+                    value="{{ workflow.name if workflow else '' }}"
+                    class="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    placeholder="e.g. Grammar Fix">
+            </div>
+
+            <div class="mb-3">
+                <label class="block text-sm text-gray-600 mb-1">Description</label>
+                <input type="text" name="description"
+                    value="{{ workflow.description if workflow and workflow.description else '' }}"
+                    class="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    placeholder="Short description of what this workflow does">
+            </div>
+
+            <div class="grid grid-cols-2 gap-3">
+                <div>
+                    <label class="block text-sm text-gray-600 mb-1">Category</label>
+                    <select name="category" class="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+                        {% set current_cat = workflow.category if workflow and workflow.category else 'text' %}
+                        <option value="text" {{ 'selected' if current_cat == 'text' }}>Text</option>
+                        <option value="translation" {{ 'selected' if current_cat == 'translation' }}>Translation</option>
+                        <option value="code" {{ 'selected' if current_cat == 'code' }}>Code</option>
+                        <option value="other" {{ 'selected' if current_cat == 'other' }}>Other</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-sm text-gray-600 mb-1">Output Action</label>
+                    <select name="output_type" class="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+                        {% set current_out = workflow.output_type if workflow and workflow.output_type else 'replace_selection' %}
+                        <option value="replace_selection" {{ 'selected' if current_out == 'replace_selection' }}>Replace Selection</option>
+                        <option value="clipboard" {{ 'selected' if current_out == 'clipboard' }}>Copy to Clipboard</option>
+                        <option value="notification" {{ 'selected' if current_out == 'notification' }}>Show Notification</option>
+                    </select>
+                </div>
+            </div>
+
+            {% if edit_mode %}
+            <div class="mt-3">
+                <label class="flex items-center gap-2 text-sm text-gray-600">
+                    <input type="checkbox" name="is_active" {{ 'checked' if workflow.is_active }}
+                        class="rounded border-gray-300">
+                    Active
+                </label>
+            </div>
+            {% endif %}
+        </div>
+
+        <!-- Pipeline Steps -->
+        <div class="bg-white rounded-lg border p-4 mb-4">
+            <div class="flex items-center justify-between mb-3">
+                <h2 class="text-sm font-semibold text-gray-700">Pipeline Steps</h2>
+                <button type="button" onclick="addStep()" class="text-xs bg-blue-50 text-blue-600 px-2 py-1 rounded hover:bg-blue-100 transition">
+                    + Add Step
+                </button>
+            </div>
+
+            <div id="steps-container">
+                <!-- Steps are rendered by JS -->
+            </div>
+
+            <p class="text-xs text-gray-400 mt-2">
+                Each step processes the text in order. Use <code class="bg-gray-100 px-1 rounded">{{ '{{text}}' }}</code> in prompts to reference the current text.
+                You can also use <code class="bg-gray-100 px-1 rounded">{{ '{{url}}' }}</code> and <code class="bg-gray-100 px-1 rounded">{{ '{{title}}' }}</code> for page context.
+            </p>
+        </div>
+
+        <!-- Hidden field for steps JSON -->
+        <input type="hidden" name="steps_json" id="steps-json" value="[]">
+
+        <!-- Submit -->
+        <div class="flex items-center gap-3">
+            <button type="submit" class="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 transition text-sm">
+                {{ 'Save Changes' if edit_mode else 'Create Workflow' }}
+            </button>
+            <a href="{{ '/admin/workflows/' + workflow.slug if edit_mode and workflow else '/admin/' }}" class="text-sm text-gray-500 hover:text-gray-700">
+                Cancel
+            </a>
+        </div>
+    </form>
+</div>
+
+<script>
+    const availableModels = {{ models | tojson }};
+    let steps = {{ (workflow.pipeline_steps | tojson) if workflow and workflow.pipeline_steps else '[]' }};
+
+    function renderSteps() {
+        const container = document.getElementById('steps-container');
+        if (steps.length === 0) {
+            container.innerHTML = '<div class="text-sm text-gray-400 text-center py-4">No steps yet. Click "Add Step" to begin.</div>';
+            updateHidden();
+            return;
+        }
+
+        container.innerHTML = steps.map((step, i) => `
+            <div class="border rounded-lg p-3 mb-2 bg-gray-50">
+                <div class="flex items-center justify-between mb-2">
+                    <span class="text-xs font-semibold text-gray-500">Step ${i + 1}: ${step.type.toUpperCase()}</span>
+                    <div class="flex items-center gap-1">
+                        ${i > 0 ? `<button type="button" onclick="moveStep(${i}, -1)" class="text-xs text-gray-400 hover:text-gray-600 px-1" title="Move up">&uarr;</button>` : ''}
+                        ${i < steps.length - 1 ? `<button type="button" onclick="moveStep(${i}, 1)" class="text-xs text-gray-400 hover:text-gray-600 px-1" title="Move down">&darr;</button>` : ''}
+                        <button type="button" onclick="removeStep(${i})" class="text-xs text-red-400 hover:text-red-600 px-1 ml-1" title="Remove">&times;</button>
+                    </div>
+                </div>
+                ${step.type === 'llm' ? renderLLMStep(step, i) : renderTransformStep(step, i)}
+            </div>
+        `).join('');
+        updateHidden();
+    }
+
+    function renderLLMStep(step, i) {
+        const modelOptions = availableModels.map(m =>
+            `<option value="${m}" ${step.model === m ? 'selected' : ''}>${m}</option>`
+        ).join('');
+
+        return `
+            <div class="mb-2">
+                <label class="block text-xs text-gray-500 mb-1">Model</label>
+                <select onchange="updateStep(${i}, 'model', this.value)" class="w-full border rounded px-2 py-1.5 text-sm bg-white">
+                    <option value="">Select model...</option>
+                    ${modelOptions}
+                    ${step.model && !availableModels.includes(step.model) ? `<option value="${step.model}" selected>${step.model}</option>` : ''}
+                </select>
+            </div>
+            <div class="mb-2">
+                <label class="block text-xs text-gray-500 mb-1">Prompt Template</label>
+                <textarea onchange="updateStep(${i}, 'prompt_template', this.value)"
+                    class="w-full border rounded px-2 py-1.5 text-sm font-mono bg-white" rows="4"
+                    placeholder="Fix grammar and spelling in this text:\n\n{{text}}">${step.prompt_template || ''}</textarea>
+            </div>
+            <div>
+                <label class="block text-xs text-gray-500 mb-1">Temperature: <span id="temp-val-${i}">${step.temperature ?? 0.3}</span></label>
+                <input type="range" min="0" max="1" step="0.1" value="${step.temperature ?? 0.3}"
+                    oninput="updateStep(${i}, 'temperature', parseFloat(this.value)); document.getElementById('temp-val-${i}').textContent = this.value"
+                    class="w-full">
+            </div>
+        `;
+    }
+
+    function renderTransformStep(step, i) {
+        return `
+            <div>
+                <label class="block text-xs text-gray-500 mb-1">Operation</label>
+                <select onchange="updateStep(${i}, 'operation', this.value)" class="w-full border rounded px-2 py-1.5 text-sm bg-white">
+                    <option value="trim" ${step.operation === 'trim' ? 'selected' : ''}>Trim whitespace</option>
+                    <option value="uppercase" ${step.operation === 'uppercase' ? 'selected' : ''}>Uppercase</option>
+                    <option value="lowercase" ${step.operation === 'lowercase' ? 'selected' : ''}>Lowercase</option>
+                </select>
+            </div>
+        `;
+    }
+
+    function addStep() {
+        steps.push({
+            type: 'llm',
+            model: availableModels[0] || '',
+            prompt_template: '',
+            temperature: 0.3,
+        });
+        renderSteps();
+    }
+
+    function removeStep(i) {
+        steps.splice(i, 1);
+        renderSteps();
+    }
+
+    function moveStep(i, direction) {
+        const j = i + direction;
+        [steps[i], steps[j]] = [steps[j], steps[i]];
+        renderSteps();
+    }
+
+    function updateStep(i, key, value) {
+        steps[i][key] = value;
+        updateHidden();
+    }
+
+    function updateHidden() {
+        document.getElementById('steps-json').value = JSON.stringify(steps);
+    }
+
+    // Initial render
+    renderSteps();
+</script>
+{% endblock %}

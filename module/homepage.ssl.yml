@@ -1,0 +1,9 @@
+# Ancroo Dashboard Widget — SSL mode
+- Automation:
+    - Ancroo:
+        icon: mdi-anchor
+        href: https://${ANCROO_DOMAIN}/admin
+        description: AI Workflow Runner for your Browser
+        siteMonitor: http://ancroo-backend:8000/health
+        server: local
+        container: ancroo-backend

@@ -1,0 +1,64 @@
+# Ancroo Server — Standalone Deployment
+#
+# Quick start (bundled database):
+#   docker compose -f standalone/compose.standalone.yml --env-file standalone/.env --profile db up -d
+#
+# With your own PostgreSQL:
+#   Set DATABASE_URL in standalone/.env, then:
+#   docker compose -f standalone/compose.standalone.yml --env-file standalone/.env up -d
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: ancroo-postgres
+    profiles: [db]
+    restart: unless-stopped
+    environment:
+      - POSTGRES_USER=${POSTGRES_USER:-ancroo}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+      - POSTGRES_DB=${POSTGRES_DB:-ancroo}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    networks:
+      - ancroo-net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-ancroo}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  ancroo-backend:
+    image: ghcr.io/stefan-schmidbauer/ancroo-backend:latest
+    container_name: ancroo-backend
+    restart: unless-stopped
+    ports:
+      - "${ANCROO_PORT:-8900}:8000"
+    environment:
+      - SECRET_KEY=${SECRET_KEY:?Set SECRET_KEY in .env}
+      - DATABASE_URL=${DATABASE_URL:-postgresql+asyncpg://ancroo:${POSTGRES_PASSWORD}@postgres:5432/ancroo}
+      - ACTIVEPIECES_URL=${ACTIVEPIECES_URL:-}
+      - ACTIVEPIECES_API_KEY=${ACTIVEPIECES_API_KEY:-}
+      - OLLAMA_BASE_URL=${OLLAMA_BASE_URL:-}
+      - WHISPER_BASE_URL=${WHISPER_BASE_URL:-}
+      - WHISPER_MODEL=${WHISPER_MODEL:-Systran/faster-whisper-large-v3}
+      - AUTH_ENABLED=${AUTH_ENABLED:-false}
+      - CORS_ORIGINS=${CORS_ORIGINS:-["chrome-extension://","http://localhost:8900"]}
+      - TZ=${TZ:-UTC}
+    networks:
+      - ancroo-net
+    depends_on:
+      postgres:
+        condition: service_healthy
+        required: false
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      start_period: 10s
+      retries: 3
+
+networks:
+  ancroo-net:
+
+volumes:
+  pgdata:

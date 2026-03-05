@@ -1,0 +1,34 @@
+services:
+  ancroo-backend:
+    image: ghcr.io/stefan-schmidbauer/ancroo-backend:latest
+    container_name: ancroo-backend
+    restart: unless-stopped
+    environment:
+      - TZ=${TZ}
+      - SECRET_KEY=${ANCROO_SECRET_KEY}
+      - DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER:-ancroo}:${POSTGRES_PASSWORD}@postgres:5432/${ANCROO_DB:-ancroo}
+      - N8N_URL=${ANCROO_N8N_URL:-http://n8n:5678}
+      - N8N_API_KEY=${ANCROO_N8N_API_KEY:-}
+      - OLLAMA_BASE_URL=${ANCROO_OLLAMA_URL:-http://ollama:11434}
+      - OLLAMA_DEFAULT_MODEL=${ANCROO_OLLAMA_MODEL:-mistral:7b}
+      - OLLAMA_CUDA_DEFAULT_MODEL=${ANCROO_OLLAMA_MODEL:-mistral:7b}
+      - OLLAMA_ROCM_DEFAULT_MODEL=${ANCROO_OLLAMA_MODEL:-mistral:7b}
+      - WHISPER_BASE_URL=${ANCROO_WHISPER_URL:-http://speaches:8000}
+      - WHISPER_MODEL=${ANCROO_WHISPER_MODEL:-Systran/faster-whisper-large-v3-turbo}
+      - WHISPER_ROCM_BASE_URL=${ANCROO_WHISPER_ROCM_URL:-}
+      - WHISPER_ROCM_MODEL=${ANCROO_WHISPER_ROCM_MODEL:-openai/whisper-large-v3-turbo}
+      - ANCROO_BACKENDS=${ANCROO_BACKENDS:-cuda}
+      - CORS_ORIGINS=["chrome-extension://","http://localhost:8900"]
+    networks:
+      - ai-network
+    depends_on:
+      postgres:
+        condition: service_healthy
+      n8n:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      start_period: 5s
+      retries: 3

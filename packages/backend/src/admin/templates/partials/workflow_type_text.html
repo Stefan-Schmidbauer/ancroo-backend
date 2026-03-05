@@ -1,0 +1,133 @@
+<!-- Text Transformation: simple LLM workflow -->
+<div class="bg-white rounded-lg border p-4 mb-4">
+    <h2 class="text-sm font-semibold text-gray-700 mb-3">Text Transformation</h2>
+
+    <div class="mb-3">
+        <label class="block text-sm text-gray-600 mb-1">Name</label>
+        <input type="text" name="name" required id="workflow-name-input"
+            value="{{ workflow.name | default('', boolean=True) }}"
+            class="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            placeholder="e.g. Fix grammar">
+        {% if not edit_mode %}
+        <div id="slug-preview" class="text-xs text-gray-400 mt-1"></div>
+        {% endif %}
+    </div>
+
+    <div class="mb-3">
+        <label class="block text-sm text-gray-600 mb-1">Description</label>
+        <input type="text" name="description"
+            value="{{ workflow.description | default('', boolean=True) }}"
+            class="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            placeholder="Short description">
+    </div>
+
+    <div class="grid grid-cols-2 gap-3 mb-3">
+        <div>
+            <label class="block text-sm text-gray-600 mb-1">LLM Provider</label>
+            <select name="llm_provider_id" required
+                hx-get="/admin/workflows/new/llm-models"
+                hx-target="#llm-model-select"
+                hx-swap="innerHTML"
+                hx-include="[name='llm_provider_id']"
+                class="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+                <option value="">— Select LLM Provider —</option>
+                {% for p in llm_providers %}
+                <option value="{{ p.id }}" {{ 'selected' if workflow and workflow.llm_provider_id == p.id }}>
+                    {{ p.name }}{% if p.default_model %} ({{ p.default_model }}){% endif %}
+                </option>
+                {% endfor %}
+            </select>
+            <p class="text-xs text-gray-400 mt-1">
+                Manage providers under <a href="/admin/llm-providers" class="text-blue-500 hover:underline">LLM Providers</a>.
+            </p>
+        </div>
+        <div>
+            <label class="block text-sm text-gray-600 mb-1">Model override (optional) <span class="htmx-indicator text-xs text-gray-400">loading...</span></label>
+            <select name="llm_model" id="llm-model-select"
+                class="w-full border rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500">
+                <option value="">— uses provider default —</option>
+                {% if workflow and workflow.llm_model %}
+                <option value="{{ workflow.llm_model }}" selected>{{ workflow.llm_model }}</option>
+                {% endif %}
+            </select>
+            <p class="text-xs text-gray-400 mt-1">Leave empty to use the provider's default model.</p>
+        </div>
+    </div>
+
+    <div class="mb-3">
+        <label class="block text-sm text-gray-600 mb-1">Category</label>
+        <select name="category" class="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+            {% set _cat = workflow.category | default('text', boolean=True) %}
+            <option value="text" {{ 'selected' if _cat == 'text' }}>Text</option>
+            <option value="translation" {{ 'selected' if _cat == 'translation' }}>Translation</option>
+            <option value="code" {{ 'selected' if _cat == 'code' }}>Code</option>
+            <option value="other" {{ 'selected' if _cat == 'other' }}>Other</option>
+        </select>
+    </div>
+
+    {% set _tc = workflow.target_config if workflow else None %}
+
+    <div class="mb-3">
+        <label class="block text-sm text-gray-600 mb-1">Prompt Template</label>
+        <textarea name="prompt_template" rows="5"
+            class="w-full border rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500"
+            placeholder="Fix grammar and spelling in the following text. Return only the corrected text:&#10;&#10;{{text}}">{{ _tc._prompt_template if _tc else '' }}</textarea>
+        <p class="text-xs text-gray-400 mt-1">
+            Use <code class="bg-gray-100 px-1 rounded">{{ '{{text}}' }}</code> for the selected text,
+            <code class="bg-gray-100 px-1 rounded">{{ '{{url}}' }}</code> and
+            <code class="bg-gray-100 px-1 rounded">{{ '{{title}}' }}</code> for page context.
+        </p>
+    </div>
+
+    <div class="grid grid-cols-2 gap-3">
+        <div>
+            {% set _temp = _tc._temperature if _tc and _tc._temperature is not none else 0.3 %}
+            <label class="block text-sm text-gray-600 mb-1">
+                Temperature: <span id="temp-display">{{ _temp }}</span>
+            </label>
+            <input type="range" name="temperature" min="0" max="1" step="0.1"
+                value="{{ _temp }}"
+                oninput="document.getElementById('temp-display').textContent = this.value"
+                class="w-full">
+        </div>
+        <div>
+            <label class="block text-sm text-gray-600 mb-1">Hotkey (optional)</label>
+            <input type="text" name="default_hotkey"
+                value="{{ workflow.default_hotkey | default('', boolean=True) }}"
+                class="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                placeholder="e.g. ctrl+shift+g">
+        </div>
+    </div>
+
+    {% if edit_mode %}
+    <div class="mt-3">
+        <label class="flex items-center gap-2 text-sm text-gray-600">
+            <input type="checkbox" name="is_active" {{ 'checked' if workflow and workflow.is_active else '' }} class="rounded border-gray-300">
+            Active
+        </label>
+    </div>
+    {% endif %}
+</div>
+
+<!-- Hidden fields: fixed values for text_transformation -->
+<input type="hidden" name="output_action" value="replace_selection">
+<input type="hidden" name="input_sources" value="text_selection">
+
+{% if not edit_mode %}
+<script>
+(function() {
+    var inp = document.getElementById('workflow-name-input');
+    var pre = document.getElementById('slug-preview');
+    if (!inp || !pre) return;
+    function toSlug(s) {
+        return s.toLowerCase().trim()
+            .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+            .replace(/[^a-z0-9\s-]/g, '').replace(/[\s_]+/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '');
+    }
+    inp.addEventListener('input', function() {
+        var slug = toSlug(inp.value);
+        pre.textContent = slug ? 'Slug: ' + slug : '';
+    });
+})();
+</script>
+{% endif %}

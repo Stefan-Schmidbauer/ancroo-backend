@@ -1,0 +1,83 @@
+{% extends "base.html" %}
+{% block title %}Ancroo Admin - Dashboard{% endblock %}
+
+{% set _icons = {'text': '✏️', 'voice': '🎙️', 'automation': '⚡', 'translation': '🌐', 'code': '💻'} %}
+{% block content %}
+<!-- Stats -->
+<div class="grid grid-cols-4 gap-4 mb-6">
+    <div class="bg-white rounded-lg border p-4">
+        <div class="text-2xl font-bold text-gray-900">{{ stats.total_workflows }}</div>
+        <div class="text-sm text-gray-500">Workflows</div>
+    </div>
+    <div class="bg-white rounded-lg border p-4">
+        <div class="text-2xl font-bold text-green-600">{{ stats.active_workflows }}</div>
+        <div class="text-sm text-gray-500">Active</div>
+    </div>
+    <div class="bg-white rounded-lg border p-4">
+        <div class="text-2xl font-bold text-blue-600">{{ stats.total_executions }}</div>
+        <div class="text-sm text-gray-500">Executions</div>
+    </div>
+    <a href="/admin/tools" class="bg-white rounded-lg border p-4 hover:border-blue-300 transition">
+        <div class="text-2xl font-bold text-purple-600">{{ stats.tool_providers }}</div>
+        <div class="text-sm text-gray-500">Tool Providers</div>
+    </a>
+</div>
+
+<!-- Workflow list -->
+<div class="flex items-center justify-between mb-4">
+    <h2 class="text-lg font-semibold text-gray-900">Workflows</h2>
+</div>
+
+{% if workflows %}
+<div class="grid gap-3">
+    {% for workflow in workflows %}
+    <a href="/admin/workflows/{{ workflow.slug }}" class="block bg-white rounded-lg border p-4 hover:border-blue-300 hover:shadow-sm transition">
+        <div class="flex items-center justify-between">
+            <div>
+                <div class="font-medium text-gray-900">{{ _icons.get(workflow.category, '🔧') }} {{ workflow.name }}</div>
+                {% if workflow.description %}
+                <div class="text-sm text-gray-500 mt-0.5">{{ workflow.description }}</div>
+                {% endif %}
+            </div>
+            <div class="flex items-center gap-3">
+                {% if workflow.category %}
+                <span class="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded">{{ workflow.category }}</span>
+                {% endif %}
+                {% include "partials/toggle_active.html" %}
+                {% if workflow.execution_type == 'tool' and workflow.tool_provider %}
+                <span class="text-xs bg-purple-50 text-purple-600 px-2 py-0.5 rounded">{{ workflow.tool_provider.name }}</span>
+                {% if workflow.sync_status == 'missing' %}
+                <span class="text-xs bg-red-100 text-red-600 px-1.5 py-0.5 rounded">missing</span>
+                {% elif workflow.sync_status == 'stale' %}
+                <span class="text-xs bg-yellow-100 text-yellow-600 px-1.5 py-0.5 rounded">stale</span>
+                {% endif %}
+                {% else %}
+                <span class="text-xs text-gray-400">{{ workflow.execution_type }}</span>
+                {% endif %}
+            </div>
+        </div>
+        {% if workflow.pipeline_steps %}
+        <div class="flex items-center gap-1 mt-2">
+            {% for step in workflow.pipeline_steps %}
+            <span class="text-xs bg-blue-50 text-blue-600 px-1.5 py-0.5 rounded">
+                {{ step.type | default('llm') | upper }}{% if step.model %}: {{ step.model }}{% endif %}
+            </span>
+            {% if not loop.last %}
+            <span class="text-gray-300 text-xs">&rarr;</span>
+            {% endif %}
+            {% endfor %}
+        </div>
+        {% endif %}
+    </a>
+    {% endfor %}
+</div>
+{% else %}
+<div class="text-center py-12 bg-white rounded-lg border">
+    <div class="text-gray-400 text-lg mb-2">No workflows yet</div>
+    <p class="text-gray-500 text-sm mb-4">Create your first workflow to get started.</p>
+    <a href="/admin/workflows/new" class="inline-block bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition text-sm">
+        Create Workflow
+    </a>
+</div>
+{% endif %}
+{% endblock %}

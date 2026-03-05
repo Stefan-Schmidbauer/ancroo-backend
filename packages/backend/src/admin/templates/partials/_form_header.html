@@ -1,0 +1,41 @@
+<!-- Shared partial: workflow name + description card.
+     Context vars (from parent):
+       workflow         – Workflow model or None (new mode)
+       name_placeholder – (optional) placeholder text for the name field -->
+<div class="bg-white rounded-lg border p-4 mb-4">
+    <div class="mb-3">
+        <label class="block text-sm text-gray-600 mb-1">Name</label>
+        <input type="text" name="name" required id="workflow-name-input"
+            value="{{ workflow.name | default('', boolean=True) }}"
+            class="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            placeholder="{{ name_placeholder | default('e.g. My workflow') }}">
+        {% if not edit_mode %}
+        <div id="slug-preview" class="text-xs text-gray-400 mt-1"></div>
+        {% endif %}
+    </div>
+    <div>
+        <label class="block text-sm text-gray-600 mb-1">Description</label>
+        <input type="text" name="description"
+            value="{{ workflow.description | default('', boolean=True) }}"
+            class="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            placeholder="Short description">
+    </div>
+</div>
+{% if not edit_mode %}
+<script>
+(function() {
+    var inp = document.getElementById('workflow-name-input');
+    var pre = document.getElementById('slug-preview');
+    if (!inp || !pre) return;
+    function toSlug(s) {
+        return s.toLowerCase().trim()
+            .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+            .replace(/[^a-z0-9\s-]/g, '').replace(/[\s_]+/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '');
+    }
+    inp.addEventListener('input', function() {
+        var slug = toSlug(inp.value);
+        pre.textContent = slug ? 'Slug: ' + slug : '';
+    });
+})();
+</script>
+{% endif %}

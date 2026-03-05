@@ -1,0 +1,82 @@
+{% extends "base.html" %}
+{% block title %}Ancroo Admin - {{ 'Edit ' + provider.name if provider else 'New STT Provider' }}{% endblock %}
+
+{% block content %}
+<div class="max-w-3xl">
+    <h1 class="text-lg font-semibold text-gray-900 mb-4">
+        {{ 'Edit STT Provider' if edit_mode else 'New STT Provider' }}
+    </h1>
+
+    <form method="post" action="{{ '/admin/stt-providers/' + (provider.id | string) + '/update' if edit_mode else '/admin/stt-providers' }}">
+        <div class="bg-white rounded-lg border p-4 mb-4">
+            <h2 class="text-sm font-semibold text-gray-700 mb-3">Provider</h2>
+
+            <div class="mb-3">
+                <label class="block text-sm text-gray-600 mb-1">Type</label>
+                <select name="provider_type" {{ 'disabled' if edit_mode }}
+                    class="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    {% set ct = provider.provider_type if provider else 'whisper_openai_compatible' %}
+                    <option value="whisper_openai_compatible" {{ 'selected' if ct == 'whisper_openai_compatible' }}>Whisper OpenAI-compatible (Speaches, Whisper-ROCm, ...)</option>
+                </select>
+                {% if edit_mode %}
+                <input type="hidden" name="provider_type" value="{{ provider.provider_type }}">
+                {% endif %}
+            </div>
+
+            <div class="mb-3">
+                <label class="block text-sm text-gray-600 mb-1">Name</label>
+                <input type="text" name="name" required
+                    value="{{ provider.name if provider else '' }}"
+                    class="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    placeholder="e.g. Speaches (CPU) or Whisper-ROCm (GPU)">
+            </div>
+
+            <div class="mb-3">
+                <label class="block text-sm text-gray-600 mb-1">Base URL</label>
+                <input type="url" name="base_url" required
+                    value="{{ provider.base_url if provider else 'http://speaches:8000' }}"
+                    class="w-full border rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    placeholder="http://speaches:8000">
+                <p class="text-xs text-gray-400 mt-1">OpenAI-compatible Whisper endpoint, e.g. <code>http://speaches:8000</code> or <code>http://whisper-rocm:8000</code></p>
+            </div>
+
+            <div class="mb-3">
+                <label class="block text-sm text-gray-600 mb-1">Default Model</label>
+                <input type="text" name="default_model" required
+                    value="{{ provider.default_model if provider else 'Systran/faster-whisper-large-v3' }}"
+                    class="w-full border rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    placeholder="Systran/faster-whisper-large-v3">
+                <p class="text-xs text-gray-400 mt-1">Used when a workflow has no model override set.</p>
+            </div>
+
+            <div class="mb-3">
+                <label class="block text-sm text-gray-600 mb-1">API Key <span class="text-gray-400">(optional)</span></label>
+                <input type="password" name="api_key"
+                    value="{{ provider.api_key if provider and provider.api_key else '' }}"
+                    class="w-full border rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    placeholder="Leave empty for local services">
+            </div>
+
+            {% if edit_mode %}
+            <div class="mt-3">
+                <label class="flex items-center gap-2 text-sm text-gray-600">
+                    <input type="checkbox" name="is_active" {{ 'checked' if provider.is_active }}
+                        class="rounded border-gray-300">
+                    Active
+                </label>
+            </div>
+            {% endif %}
+        </div>
+
+        <div class="flex items-center gap-3">
+            <button type="submit" class="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 transition text-sm">
+                {{ 'Save Changes' if edit_mode else 'Create Provider' }}
+            </button>
+            <a href="{{ '/admin/stt-providers/' + (provider.id | string) if edit_mode and provider else '/admin/stt-providers' }}"
+               class="text-sm text-gray-500 hover:text-gray-700">
+                Cancel
+            </a>
+        </div>
+    </form>
+</div>
+{% endblock %}

@@ -1,0 +1,42 @@
+{% if flows %}
+<div class="space-y-2">
+    {% for flow in flows %}
+    <div class="flex items-center justify-between py-2 px-3 bg-gray-50 rounded-lg text-sm {{ 'opacity-60' if flow.already_imported }}">
+        <div class="flex-1">
+            <div class="font-medium text-gray-900">{{ flow.name }}</div>
+            {% if flow.description %}
+            <div class="text-xs text-gray-500 mt-0.5">{{ flow.description }}</div>
+            {% endif %}
+            <div class="flex items-center gap-2 mt-1">
+                <span class="text-xs text-gray-400">{{ flow.trigger_type }}</span>
+                {% if flow.has_webhook %}
+                <span class="text-xs bg-blue-50 text-blue-600 px-1.5 py-0.5 rounded">webhook</span>
+                {% endif %}
+                <span class="text-xs {{ 'text-green-600' if flow.status == 'ENABLED' else 'text-gray-400' }}">{{ flow.status }}</span>
+            </div>
+        </div>
+        <div>
+            {% if flow.already_imported %}
+            <span class="text-xs text-gray-400 px-2 py-1">Already imported</span>
+            {% elif flow.has_webhook %}
+            <button hx-post="/admin/tools/{{ provider_id }}/import"
+                    hx-vals='{"flow_id": "{{ flow.id }}", "flow_name": "{{ flow.name }}"}'
+                    hx-target="closest div.flex"
+                    hx-swap="outerHTML"
+                    class="text-xs bg-green-50 text-green-600 px-2 py-1 rounded hover:bg-green-100 transition">
+                Import
+                <span class="htmx-indicator">...</span>
+            </button>
+            {% else %}
+            <span class="text-xs text-gray-400 px-2 py-1" title="Only webhook-triggered flows can be imported">No webhook</span>
+            {% endif %}
+        </div>
+    </div>
+    {% endfor %}
+</div>
+<p class="text-xs text-gray-400 mt-2">{{ flows | length }} flow{{ 's' if flows | length != 1 }} found</p>
+{% else %}
+<div class="text-sm text-gray-400 text-center py-4">
+    No flows found. Make sure the provider has flows configured and the API key is correct.
+</div>
+{% endif %}

@@ -1,0 +1,17 @@
+# ancroo-backend — gitleaks configuration
+# Reduces false positives on template/example files with placeholder values.
+
+title = "ancroo-backend gitleaks config"
+
+[allowlist]
+  description = "Known safe patterns and template files"
+
+  # CHANGE_ME placeholders are templates, not real secrets
+  regexes = [
+    '''CHANGE_ME[\w]*''',
+  ]
+
+  paths = [
+    '''.env\.example$''',
+    '''module\.env$''',
+  ]

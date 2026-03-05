@@ -1,0 +1,9 @@
+<button id="toggle-{{ workflow.slug }}"
+        hx-post="/admin/workflows/{{ workflow.slug }}/toggle-active"
+        hx-swap="outerHTML"
+        class="text-sm font-medium px-3 py-1 rounded-md cursor-pointer border transition {{ 'bg-green-50 text-green-700 border-green-300 hover:bg-green-100' if workflow.is_active else 'bg-gray-50 text-gray-500 border-gray-300 hover:bg-gray-100' }}"
+        onclick="event.preventDefault(); event.stopPropagation();"
+        title="Click to {{ 'deactivate' if workflow.is_active else 'activate' }}">
+    {{ 'Active' if workflow.is_active else 'Inactive' }}
+    <span class="htmx-indicator">...</span>
+</button>

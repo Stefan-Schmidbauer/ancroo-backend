@@ -1,0 +1,4 @@
+services:
+  ancroo-backend:
+    ports:
+      - "${ANCROO_PORT:-8900}:8000"

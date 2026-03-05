@@ -1,0 +1,8 @@
+services:
+  ancroo-backend:
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.ancroo.rule=Host(`${ANCROO_DOMAIN}`)"
+      - "traefik.http.routers.ancroo.entrypoints=websecure"
+      - "traefik.http.routers.ancroo.tls=true"
+      - "traefik.http.services.ancroo.loadbalancer.server.port=8000"

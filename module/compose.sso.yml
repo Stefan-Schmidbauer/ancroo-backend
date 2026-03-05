@@ -1,0 +1,18 @@
+services:
+  ancroo-backend:
+    labels:
+      # API + health: no forward-auth (extension uses Bearer tokens)
+      - "traefik.http.routers.ancroo-api.rule=Host(`${ANCROO_DOMAIN}`) && (PathPrefix(`/api`) || Path(`/health`))"
+      - "traefik.http.routers.ancroo-api.entrypoints=websecure"
+      - "traefik.http.routers.ancroo-api.tls=true"
+      - "traefik.http.routers.ancroo-api.priority=200"
+      # Everything else: forward-auth (browser UI)
+      - "traefik.http.routers.ancroo.middlewares=keycloak-forward-auth"
+    environment:
+      - AUTH_ENABLED=true
+      # External issuer for JWT verification + browser auth URL derivation
+      - OIDC_ISSUER=https://${KEYCLOAK_DOMAIN}/realms/${ANCROO_KEYCLOAK_REALM:-ancroo}
+      # Internal URLs for server-to-server communication
+      - OIDC_TOKEN_URL=http://keycloak:8080/realms/${ANCROO_KEYCLOAK_REALM:-ancroo}/protocol/openid-connect/token
+      - OIDC_JWKS_URL=http://keycloak:8080/realms/${ANCROO_KEYCLOAK_REALM:-ancroo}/protocol/openid-connect/certs
+      - OIDC_USERINFO_URL=http://keycloak:8080/realms/${ANCROO_KEYCLOAK_REALM:-ancroo}/protocol/openid-connect/userinfo

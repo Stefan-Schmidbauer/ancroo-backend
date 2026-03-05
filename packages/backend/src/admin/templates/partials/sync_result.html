@@ -1,0 +1,9 @@
+{% if error %}
+<div class="text-xs bg-red-50 text-red-700 border border-red-200 rounded p-2">
+    Sync failed: {{ error }}
+</div>
+{% else %}
+<div class="text-xs bg-green-50 text-green-700 border border-green-200 rounded p-2">
+    Sync complete: {{ synced }} synced, {{ updated }} updated, {{ missing }} missing ({{ total }} total)
+</div>
+{% endif %}

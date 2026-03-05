@@ -1,0 +1,131 @@
+{% extends "base.html" %}
+{% block title %}Ancroo Admin - {{ provider.name }}{% endblock %}
+
+{% block content %}
+<div class="max-w-3xl">
+    <!-- Header -->
+    <div class="flex items-center justify-between mb-4">
+        <div>
+            <h1 class="text-lg font-semibold text-gray-900">{{ provider.name }}</h1>
+            <p class="text-sm text-gray-500 mt-0.5 font-mono">{{ provider.base_url }}</p>
+        </div>
+        <div class="flex items-center gap-2">
+            <span class="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded">{{ provider.provider_type }}</span>
+            <span class="text-xs px-2 py-0.5 rounded {{ 'bg-green-100 text-green-700' if provider.is_active else 'bg-gray-100 text-gray-500' }}">
+                {{ 'Active' if provider.is_active else 'Inactive' }}
+            </span>
+        </div>
+    </div>
+
+    <!-- Health Status -->
+    <div class="bg-white rounded-lg border p-4 mb-4">
+        <div class="flex items-center justify-between mb-2">
+            <h2 class="text-sm font-semibold text-gray-700">Health Status</h2>
+            <button hx-post="/admin/tools/{{ provider.id }}/health-check"
+                    hx-target="#health-result" hx-swap="innerHTML"
+                    class="text-xs bg-gray-100 text-gray-600 px-2 py-1 rounded hover:bg-gray-200 transition">
+                Check Now
+                <span class="htmx-indicator">...</span>
+            </button>
+        </div>
+        <div id="health-result">
+            <div class="flex items-center gap-2">
+                {% if provider.health_status == 'healthy' %}
+                <span class="w-2.5 h-2.5 rounded-full bg-green-500"></span>
+                <span class="text-sm text-green-700">Healthy</span>
+                {% elif provider.health_status == 'unhealthy' %}
+                <span class="w-2.5 h-2.5 rounded-full bg-red-500"></span>
+                <span class="text-sm text-red-700">Unhealthy</span>
+                {% else %}
+                <span class="w-2.5 h-2.5 rounded-full bg-gray-300"></span>
+                <span class="text-sm text-gray-500">Unknown — click "Check Now"</span>
+                {% endif %}
+                {% if provider.last_health_check %}
+                <span class="text-xs text-gray-400 ml-auto">Last: {{ provider.last_health_check.strftime('%Y-%m-%d %H:%M') }}</span>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Discover Flows -->
+    <div class="bg-white rounded-lg border p-4 mb-4">
+        <div class="flex items-center justify-between mb-3">
+            <h2 class="text-sm font-semibold text-gray-700">External Flows</h2>
+            <div class="flex items-center gap-2">
+                <button hx-post="/admin/tools/{{ provider.id }}/sync"
+                        hx-target="#sync-result" hx-swap="innerHTML"
+                        class="text-xs bg-gray-100 text-gray-600 px-2 py-1 rounded hover:bg-gray-200 transition">
+                    Sync
+                    <span class="htmx-indicator">...</span>
+                </button>
+                <button hx-get="/admin/tools/{{ provider.id }}/discover"
+                        hx-target="#flow-list" hx-swap="innerHTML"
+                        class="text-xs bg-blue-50 text-blue-600 px-2 py-1 rounded hover:bg-blue-100 transition">
+                    Discover Flows
+                    <span class="htmx-indicator">...</span>
+                </button>
+            </div>
+        </div>
+        <div id="sync-result" class="mb-2"></div>
+        <div id="flow-list">
+            <p class="text-sm text-gray-400 text-center py-4">Click "Discover Flows" to find available workflows in {{ provider.name }}.</p>
+        </div>
+    </div>
+
+    <!-- Linked Workflows -->
+    {% if linked_workflows %}
+    <div class="bg-white rounded-lg border p-4 mb-4">
+        <h2 class="text-sm font-semibold text-gray-700 mb-3">Linked Workflows</h2>
+        <div class="space-y-2">
+            {% for wf in linked_workflows %}
+            <a href="/admin/workflows/{{ wf.slug }}" class="flex items-center justify-between py-1.5 text-sm hover:bg-gray-50 px-2 rounded {{ 'border-t' if not loop.first }}">
+                <span class="text-gray-900">{{ wf.name }}</span>
+                <div class="flex items-center gap-2">
+                    <span class="text-xs text-gray-400 font-mono">{{ (wf.external_flow_id or '')[:12] }}{{ '...' if wf.external_flow_id else 'n/a' }}</span>
+                    {% if wf.sync_status == 'synced' %}
+                    <span class="text-xs bg-green-100 text-green-700 px-1.5 py-0.5 rounded">synced</span>
+                    {% elif wf.sync_status == 'missing' %}
+                    <span class="text-xs bg-red-100 text-red-700 px-1.5 py-0.5 rounded">missing</span>
+                    {% elif wf.sync_status == 'stale' %}
+                    <span class="text-xs bg-yellow-100 text-yellow-700 px-1.5 py-0.5 rounded">stale</span>
+                    {% else %}
+                    <span class="text-xs bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded">manual</span>
+                    {% endif %}
+                </div>
+            </a>
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Details -->
+    <div class="bg-white rounded-lg border p-4 mb-4">
+        <h2 class="text-sm font-semibold text-gray-700 mb-2">Details</h2>
+        <dl class="grid grid-cols-2 gap-2 text-sm">
+            <dt class="text-gray-500">Provider Type</dt>
+            <dd class="text-gray-900">{{ provider.provider_type }}</dd>
+            <dt class="text-gray-500">API Key</dt>
+            <dd class="text-gray-900">{{ '***configured***' if provider.api_key else 'Not set' }}</dd>
+            <dt class="text-gray-500">Created</dt>
+            <dd class="text-gray-900">{{ provider.created_at.strftime('%Y-%m-%d %H:%M') if provider.created_at else '' }}</dd>
+        </dl>
+    </div>
+
+    <!-- Actions -->
+    <div class="flex items-center gap-3">
+        <a href="/admin/tools/{{ provider.id }}/edit"
+            class="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition text-sm">
+            Edit Provider
+        </a>
+        <form method="post" action="/admin/tools/{{ provider.id }}/delete"
+            onsubmit="return confirm('Delete this provider? Linked workflows will keep their external_flow_id but lose the provider reference.')">
+            <button type="submit" class="text-sm text-red-500 hover:text-red-700 px-4 py-2">
+                Delete
+            </button>
+        </form>
+        <a href="/admin/tools" class="text-sm text-gray-500 hover:text-gray-700 ml-auto">
+            Back
+        </a>
+    </div>
+</div>
+{% endblock %}

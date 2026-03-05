@@ -1,0 +1,201 @@
+{% extends "base.html" %}
+{% block title %}Ancroo Admin - Import Workflows{% endblock %}
+
+{% block content %}
+<div class="max-w-2xl mx-auto">
+    <h1 class="text-xl font-bold text-gray-900 mb-6">Import Workflows</h1>
+
+    <div class="bg-white rounded-lg border p-6">
+        <p class="text-sm text-gray-600 mb-4">
+            Upload one or more workflow JSON files to import them. Each file must contain at least
+            <code class="bg-gray-100 px-1 rounded">slug</code>,
+            <code class="bg-gray-100 px-1 rounded">name</code>, and
+            <code class="bg-gray-100 px-1 rounded">workflow_type</code>.
+            Providers (LLM, STT, n8n) are resolved automatically.
+        </p>
+
+        <!-- File upload -->
+        <form id="import-form" class="space-y-4">
+            <div id="drop-zone"
+                 class="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center hover:border-blue-400 transition cursor-pointer">
+                <input type="file" id="file-input" accept=".json,application/json" multiple class="hidden">
+                <div id="drop-prompt" class="text-gray-500">
+                    <div class="text-lg mb-1">Drop JSON files here</div>
+                    <div class="text-sm">or click to select</div>
+                </div>
+                <div id="file-list" class="hidden mt-2 text-sm text-left"></div>
+            </div>
+
+            <button type="submit" id="import-btn" disabled
+                    class="w-full bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition text-sm disabled:opacity-50 disabled:cursor-not-allowed">
+                Import Workflows
+                <span id="import-spinner" class="hidden ml-2">...</span>
+            </button>
+        </form>
+
+        <!-- Result -->
+        <div id="import-result" class="mt-4 space-y-2"></div>
+    </div>
+</div>
+
+<script>
+(function() {
+    var dropZone = document.getElementById('drop-zone');
+    var fileInput = document.getElementById('file-input');
+    var dropPrompt = document.getElementById('drop-prompt');
+    var fileListDiv = document.getElementById('file-list');
+    var importBtn = document.getElementById('import-btn');
+    var importForm = document.getElementById('import-form');
+    var resultDiv = document.getElementById('import-result');
+    var spinner = document.getElementById('import-spinner');
+    var selectedFiles = [];
+
+    dropZone.addEventListener('click', function() { fileInput.click(); });
+
+    dropZone.addEventListener('dragover', function(e) {
+        e.preventDefault();
+        dropZone.classList.add('border-blue-400', 'bg-blue-50');
+    });
+
+    dropZone.addEventListener('dragleave', function() {
+        dropZone.classList.remove('border-blue-400', 'bg-blue-50');
+    });
+
+    dropZone.addEventListener('drop', function(e) {
+        e.preventDefault();
+        dropZone.classList.remove('border-blue-400', 'bg-blue-50');
+        if (e.dataTransfer.files.length > 0) {
+            addFiles(e.dataTransfer.files);
+        }
+    });
+
+    fileInput.addEventListener('change', function() {
+        if (fileInput.files.length > 0) {
+            addFiles(fileInput.files);
+        }
+    });
+
+    function addFiles(fileList) {
+        for (var i = 0; i < fileList.length; i++) {
+            var file = fileList[i];
+            var alreadyAdded = selectedFiles.some(function(f) {
+                return f.name === file.name && f.size === file.size;
+            });
+            if (!alreadyAdded) {
+                selectedFiles.push(file);
+            }
+        }
+        renderFileList();
+        importBtn.disabled = selectedFiles.length === 0;
+        // Reset input so re-selecting the same files triggers change
+        fileInput.value = '';
+    }
+
+    function removeFile(index) {
+        selectedFiles.splice(index, 1);
+        renderFileList();
+        importBtn.disabled = selectedFiles.length === 0;
+    }
+
+    function renderFileList() {
+        if (selectedFiles.length === 0) {
+            fileListDiv.classList.add('hidden');
+            dropPrompt.classList.remove('hidden');
+            importBtn.textContent = 'Import Workflows';
+            return;
+        }
+
+        dropPrompt.classList.add('hidden');
+        fileListDiv.classList.remove('hidden');
+
+        var html = '';
+        for (var i = 0; i < selectedFiles.length; i++) {
+            html += '<div class="flex items-center justify-between py-1">'
+                + '<span class="font-medium text-blue-600 truncate">' + escapeHtml(selectedFiles[i].name) + '</span>'
+                + '<button type="button" data-index="' + i + '" class="remove-file text-xs text-gray-400 hover:text-red-500 ml-2 shrink-0">&times;</button>'
+                + '</div>';
+        }
+        html += '<div class="text-xs text-gray-400 mt-1">' + selectedFiles.length + ' file' + (selectedFiles.length > 1 ? 's' : '') + ' selected</div>';
+        fileListDiv.innerHTML = html;
+
+        fileListDiv.querySelectorAll('.remove-file').forEach(function(btn) {
+            btn.addEventListener('click', function(e) {
+                e.stopPropagation();
+                removeFile(parseInt(btn.dataset.index));
+            });
+        });
+
+        importBtn.textContent = selectedFiles.length === 1 ? 'Import Workflow' : 'Import ' + selectedFiles.length + ' Workflows';
+    }
+
+    function escapeHtml(str) {
+        var div = document.createElement('div');
+        div.textContent = str;
+        return div.innerHTML;
+    }
+
+    function readFileAsText(file) {
+        return new Promise(function(resolve, reject) {
+            var reader = new FileReader();
+            reader.onload = function(ev) { resolve(ev.target.result); };
+            reader.onerror = function() { reject(new Error('Failed to read ' + file.name)); };
+            reader.readAsText(file);
+        });
+    }
+
+    importForm.addEventListener('submit', function(e) {
+        e.preventDefault();
+        if (selectedFiles.length === 0) return;
+
+        importBtn.disabled = true;
+        spinner.classList.remove('hidden');
+        resultDiv.innerHTML = '';
+
+        var files = selectedFiles.slice();
+
+        (async function() {
+            for (var i = 0; i < files.length; i++) {
+                var file = files[i];
+                var content;
+                try {
+                    content = await readFileAsText(file);
+                } catch (err) {
+                    resultDiv.innerHTML += '<div class="bg-red-50 text-red-700 border border-red-200 rounded-lg p-3 text-sm">'
+                        + escapeHtml(file.name) + ': ' + escapeHtml(err.message) + '</div>';
+                    continue;
+                }
+
+                try {
+                    JSON.parse(content);
+                } catch (err) {
+                    resultDiv.innerHTML += '<div class="bg-red-50 text-red-700 border border-red-200 rounded-lg p-3 text-sm">'
+                        + escapeHtml(file.name) + ': Invalid JSON &mdash; ' + escapeHtml(err.message) + '</div>';
+                    continue;
+                }
+
+                try {
+                    var resp = await fetch('/admin/api/import-workflow', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'HX-Request': 'true',
+                        },
+                        body: content,
+                    });
+                    var html = await resp.text();
+                    resultDiv.innerHTML += html;
+                } catch (err) {
+                    resultDiv.innerHTML += '<div class="bg-red-50 text-red-700 border border-red-200 rounded-lg p-3 text-sm">'
+                        + escapeHtml(file.name) + ': Request failed &mdash; ' + escapeHtml(err.message) + '</div>';
+                }
+            }
+
+            selectedFiles = [];
+            renderFileList();
+            importBtn.disabled = false;
+            spinner.classList.add('hidden');
+        })();
+    });
+})();
+</script>
+{% endblock %}

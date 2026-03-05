@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Ancroo Admin{% endblock %}</title>
+    <link rel="icon" type="image/png" href="/static/favicon.png">
+    <link rel="apple-touch-icon" href="/static/apple-touch-icon.png">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/htmx.org@2.0.4"></script>
+    <style>
+        [x-cloak] { display: none !important; }
+        .htmx-indicator { display: none; }
+        .htmx-request .htmx-indicator { display: inline-block; }
+        .htmx-request.htmx-indicator { display: inline-block; }
+        @keyframes toast-in { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+        @keyframes toast-out { from { opacity: 1; } to { opacity: 0; } }
+        .toast { animation: toast-in .3s ease-out; }
+        .toast-dismiss { animation: toast-out .3s ease-in forwards; }
+    </style>
+</head>
+<body class="bg-gray-50 min-h-screen">
+    <!-- Nav -->
+    <nav class="bg-white border-b">
+        <div class="max-w-5xl mx-auto px-4 py-3 flex items-center justify-between">
+            <a href="/admin/" class="flex items-center gap-2 font-bold text-lg text-gray-900">
+                <img src="/static/favicon.png" alt="Ancroo" width="24" height="24" class="rounded">
+                Ancroo
+            </a>
+            <div class="flex items-center gap-4">
+                <a href="/admin/" class="text-sm text-gray-600 hover:text-gray-900">Workflows</a>
+                <a href="/admin/llm-providers" class="text-sm text-gray-600 hover:text-gray-900">LLM Providers</a>
+                <a href="/admin/stt-providers" class="text-sm text-gray-600 hover:text-gray-900">STT Providers</a>
+                <a href="/admin/tools" class="text-sm text-gray-600 hover:text-gray-900">Tools</a>
+                <a href="/admin/import" class="text-sm text-gray-600 hover:text-gray-900">Import</a>
+                <a href="/admin/about" class="text-sm text-gray-600 hover:text-gray-900">About</a>
+                <a href="/admin/workflows/new" class="text-sm bg-blue-600 text-white px-3 py-1.5 rounded-lg hover:bg-blue-700 transition">
+                    + New Workflow
+                </a>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Toast notification -->
+    {% if flash_message %}
+    <div id="toast" class="toast fixed top-4 right-4 z-50 flex items-center gap-2 px-4 py-3 rounded-lg shadow-lg text-sm {{ 'bg-green-600 text-white' if flash_type == 'success' else 'bg-red-600 text-white' }}">
+        <span>{{ flash_message }}</span>
+        <button onclick="dismissToast()" class="ml-2 opacity-70 hover:opacity-100">&times;</button>
+    </div>
+    {% endif %}
+
+    <!-- Content -->
+    <main class="max-w-5xl mx-auto px-4 py-6">
+        {% block content %}{% endblock %}
+    </main>
+
+    {% if flash_message %}
+    <script>
+    function dismissToast() {
+        var t = document.getElementById('toast');
+        if (t) { t.classList.add('toast-dismiss'); setTimeout(function() { t.remove(); }, 300); }
+    }
+    setTimeout(dismissToast, 4000);
+    if (window.history.replaceState) {
+        var url = new URL(window.location);
+        url.searchParams.delete('flash');
+        window.history.replaceState({}, '', url);
+    }
+    </script>
+    {% endif %}
+</body>
+</html>

@@ -1,0 +1,93 @@
+<!-- Speech-to-Text: Whisper transcription workflow -->
+{% set name_placeholder = "e.g. Speech to text (German)" %}
+{% include 'partials/_form_header.html' %}
+
+<!-- STT Provider Configuration -->
+<div class="bg-white rounded-lg border p-4 mb-4">
+    <h2 class="text-sm font-semibold text-gray-700 mb-3">STT Provider</h2>
+
+    {% set _tc = workflow.target_config if workflow else None %}
+
+    <div class="mb-3">
+        <label class="block text-sm text-gray-600 mb-1">Provider</label>
+        <select name="stt_provider_id" required
+            class="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+            <option value="">— Select STT Provider —</option>
+            {% for p in stt_providers %}
+            <option value="{{ p.id }}" {{ 'selected' if workflow and workflow.stt_provider_id == p.id }}>
+                {{ p.name }} ({{ p.default_model }})
+            </option>
+            {% endfor %}
+        </select>
+        <p class="text-xs text-gray-400 mt-1">
+            Manage providers under <a href="/admin/stt-providers" class="text-blue-500 hover:underline">STT Providers</a>.
+        </p>
+    </div>
+
+    <div class="grid grid-cols-2 gap-3">
+        <div>
+            <label class="block text-sm text-gray-600 mb-1">Model override (optional)</label>
+            <input type="text" name="stt_model"
+                value="{{ workflow.stt_model if workflow and workflow.stt_model else '' }}"
+                class="w-full border rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500"
+                placeholder="uses provider default">
+            <p class="text-xs text-gray-400 mt-1">Leave empty to use the provider's default model.</p>
+        </div>
+        <div>
+            <label class="block text-sm text-gray-600 mb-1">Language (optional)</label>
+            <input type="text" name="stt_language"
+                value="{{ _tc._language if _tc and _tc._language else '' }}"
+                class="w-full border rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500"
+                placeholder="de / en / fr ...">
+            <p class="text-xs text-gray-400 mt-1">ISO 639-1 code. Leave empty for auto-detection.</p>
+        </div>
+    </div>
+</div>
+
+<!-- Output Configuration -->
+<div class="bg-white rounded-lg border p-4 mb-4">
+    <h2 class="text-sm font-semibold text-gray-700 mb-3">Output</h2>
+
+    {% set _cat = workflow.category | default('voice', boolean=True) %}
+    {% set _action = workflow.output_action | default('copy_to_clipboard', boolean=True) %}
+
+    <div class="grid grid-cols-2 gap-3">
+        <div>
+            <label class="block text-sm text-gray-600 mb-1">Category</label>
+            <select name="category" class="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+                <option value="voice" {{ 'selected' if _cat == 'voice' }}>Voice</option>
+                <option value="text" {{ 'selected' if _cat == 'text' }}>Text</option>
+                <option value="other" {{ 'selected' if _cat == 'other' }}>Other</option>
+            </select>
+        </div>
+        <div>
+            <label class="block text-sm text-gray-600 mb-1">Output Action</label>
+            <select name="output_action" class="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+                <option value="copy_to_clipboard" {{ 'selected' if _action == 'copy_to_clipboard' }}>Copy to Clipboard</option>
+                <option value="replace_selection" {{ 'selected' if _action == 'replace_selection' }}>Replace Selection</option>
+                <option value="notification" {{ 'selected' if _action == 'notification' }}>Notification</option>
+                <option value="none" {{ 'selected' if _action == 'none' }}>None</option>
+            </select>
+        </div>
+    </div>
+
+    <div class="mt-3">
+        <label class="block text-sm text-gray-600 mb-1">Hotkey (optional)</label>
+        <input type="text" name="default_hotkey"
+            value="{{ workflow.default_hotkey | default('', boolean=True) }}"
+            class="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            placeholder="e.g. ctrl+shift+v">
+    </div>
+
+    {% if edit_mode %}
+    <div class="mt-3">
+        <label class="flex items-center gap-2 text-sm text-gray-600">
+            <input type="checkbox" name="is_active" {{ 'checked' if workflow and workflow.is_active else '' }} class="rounded border-gray-300">
+            Active
+        </label>
+    </div>
+    {% endif %}
+</div>
+
+<!-- Hidden fields: fixed values for speech_to_text -->
+<input type="hidden" name="input_sources" value="audio">

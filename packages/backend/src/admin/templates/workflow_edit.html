@@ -1,0 +1,34 @@
+{% extends "base.html" %}
+{% block title %}Ancroo Admin - Edit {{ workflow.name }}{% endblock %}
+
+{% block content %}
+<div class="max-w-3xl">
+    <div class="flex items-center justify-between mb-4">
+        <h1 class="text-lg font-semibold text-gray-900">Edit Workflow</h1>
+        <a href="/admin/workflows/{{ workflow.slug }}" class="text-sm text-gray-500 hover:text-gray-700">← Back</a>
+    </div>
+
+    <form method="post" action="/admin/workflows/{{ workflow.slug }}/update">
+        <input type="hidden" name="workflow_type" value="{{ workflow.workflow_type }}">
+
+        {% if workflow.workflow_type == 'text_transformation' %}
+            {% include "partials/workflow_type_text.html" %}
+        {% elif workflow.workflow_type == 'workflow_trigger' %}
+            {% include "partials/workflow_type_trigger.html" %}
+        {% elif workflow.workflow_type == 'custom' %}
+            {% include "partials/workflow_type_custom.html" %}
+        {% elif workflow.workflow_type == 'speech_to_text' %}
+            {% include "partials/workflow_type_whisper.html" %}
+        {% endif %}
+
+        <div class="flex items-center gap-3 mt-2">
+            <button type="submit" class="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 transition text-sm">
+                Save Changes
+            </button>
+            <a href="/admin/workflows/{{ workflow.slug }}" class="text-sm text-gray-500 hover:text-gray-700">
+                Cancel
+            </a>
+        </div>
+    </form>
+</div>
+{% endblock %}

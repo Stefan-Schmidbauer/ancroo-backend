@@ -1,0 +1,10 @@
+<div class="flex items-center gap-2">
+    {% if healthy %}
+    <span class="w-2.5 h-2.5 rounded-full bg-green-500"></span>
+    <span class="text-sm text-green-700">Healthy</span>
+    {% else %}
+    <span class="w-2.5 h-2.5 rounded-full bg-red-500"></span>
+    <span class="text-sm text-red-700">Unhealthy — {{ message }}</span>
+    {% endif %}
+    <span class="text-xs text-gray-400 ml-auto">Just now</span>
+</div>

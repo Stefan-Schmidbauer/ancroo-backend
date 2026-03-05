@@ -1,0 +1,36 @@
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+*.egg-info/
+*.egg
+.eggs/
+.env
+.env.local
+.env.*.local
+*.log
+logs/
+data/
+# Private keys / certificates
+*.key
+*.pem
+*.p12
+*.pfx
+
+.pytest_cache/
+.mypy_cache/
+dist/
+build/
+
+# Build-time generated version file
+packages/backend/src/BUILD_COMMIT
+
+.vscode/
+.idea/
+*.swp
+*~
+.DS_Store
+
+# Claude Code
+.claude/

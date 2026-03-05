@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+{% block title %}Ancroo Admin - LLM Providers{% endblock %}
+
+{% block content %}
+<div class="flex items-center justify-between mb-4">
+    <h1 class="text-lg font-semibold text-gray-900">LLM Providers</h1>
+    <a href="/admin/llm-providers/new" class="text-sm bg-blue-600 text-white px-3 py-1.5 rounded-lg hover:bg-blue-700 transition">
+        + New Provider
+    </a>
+</div>
+
+{% if providers %}
+<div class="grid gap-3">
+    {% for provider in providers %}
+    <a href="/admin/llm-providers/{{ provider.id }}" class="block bg-white rounded-lg border p-4 hover:border-blue-300 hover:shadow-sm transition">
+        <div class="flex items-center justify-between">
+            <div>
+                <div class="font-medium text-gray-900">{{ provider.name }}</div>
+                <div class="text-sm text-gray-500 mt-0.5 font-mono">{{ provider.base_url }}</div>
+            </div>
+            <div class="flex items-center gap-3">
+                <span class="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded">{{ provider.provider_type }}</span>
+                <span class="text-xs font-mono text-gray-500">{{ provider.default_model or 'no default model' }}</span>
+                <span class="text-xs px-2 py-0.5 rounded {{ 'bg-green-100 text-green-700' if provider.is_active else 'bg-gray-100 text-gray-500' }}">
+                    {{ 'Active' if provider.is_active else 'Inactive' }}
+                </span>
+                {% if provider.health_status == 'healthy' %}
+                <span class="w-2 h-2 rounded-full bg-green-500" title="Healthy"></span>
+                {% elif provider.health_status == 'unhealthy' %}
+                <span class="w-2 h-2 rounded-full bg-red-500" title="Unhealthy"></span>
+                {% else %}
+                <span class="w-2 h-2 rounded-full bg-gray-300" title="Unknown"></span>
+                {% endif %}
+            </div>
+        </div>
+        {% if provider.workflows %}
+        <div class="mt-2 text-xs text-gray-400">
+            {{ provider.workflows | length }} workflow{{ 's' if provider.workflows | length != 1 }} assigned
+        </div>
+        {% endif %}
+    </a>
+    {% endfor %}
+</div>
+{% else %}
+<div class="text-center py-12 bg-white rounded-lg border">
+    <div class="text-gray-400 text-lg mb-2">No LLM providers configured</div>
+    <p class="text-gray-500 text-sm mb-4">Add an Ollama instance or OpenAI-compatible endpoint to power your LLM workflows.</p>
+    <a href="/admin/llm-providers/new" class="inline-block bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition text-sm">
+        Add Provider
+    </a>
+</div>
+{% endif %}
+{% endblock %}

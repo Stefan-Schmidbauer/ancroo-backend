@@ -1,0 +1,137 @@
+<!-- Custom: Full HTTP control -->
+{% set name_placeholder = "e.g. RAG query" %}
+{% include 'partials/_form_header.html' %}
+
+{% set default_collect = ['text_selection', 'page_context'] %}
+{% include 'partials/_input_sources.html' %}
+
+<!-- HTTP Target -->
+<div class="bg-white rounded-lg border p-4 mb-4">
+    <h2 class="text-sm font-semibold text-gray-700 mb-3">HTTP Target</h2>
+
+    {% set _tc = workflow.target_config if workflow else None %}
+    {% set _url = _tc.url if _tc else '' %}
+    {% set _method = _tc.method if _tc else 'POST' %}
+    {% set _headers = _tc.headers | tojson if _tc and _tc.headers else '{"Content-Type": "application/json"}' %}
+    {% set _payload = _tc.payload_template if _tc else '' %}
+
+    <div class="grid grid-cols-3 gap-3 mb-3">
+        <div class="col-span-2">
+            <label class="block text-sm text-gray-600 mb-1">URL</label>
+            <input type="url" name="target_url" required
+                value="{{ _url }}"
+                class="w-full border rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500"
+                placeholder="http://open-webui:8080/api/v1/chat/completions">
+        </div>
+        <div>
+            <label class="block text-sm text-gray-600 mb-1">Method</label>
+            <select name="target_method" class="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+                <option value="POST" {{ 'selected' if _method == 'POST' else '' }}>POST</option>
+                <option value="GET" {{ 'selected' if _method == 'GET' else '' }}>GET</option>
+                <option value="PUT" {{ 'selected' if _method == 'PUT' else '' }}>PUT</option>
+            </select>
+        </div>
+    </div>
+
+    <div class="mb-3">
+        <label class="block text-sm text-gray-600 mb-1">Headers (optional)</label>
+        <textarea name="target_headers" rows="2" id="target-headers"
+            class="w-full border rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500"
+            placeholder='{"Content-Type": "application/json", "Authorization": "Bearer ..."}'>{{ _headers }}</textarea>
+        <p class="text-xs text-gray-400 mt-1" id="headers-hint">JSON object or one <code class="bg-gray-100 px-1 rounded">Key: Value</code> per line.</p>
+    </div>
+
+    <div>
+        <label class="block text-sm text-gray-600 mb-1">Payload Template (Jinja2)</label>
+        <textarea name="payload_template" rows="6"
+            class="w-full border rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500"
+            placeholder='{&#10;  "messages": [{"role": "user", "content": "{{text}}"}],&#10;  "model": "mistral:7b"&#10;}'>{{ _payload }}</textarea>
+        <p class="text-xs text-gray-400 mt-1">
+            Variables:
+            <code class="bg-gray-100 px-1 rounded">{{ '{{text}}' }}</code>
+            <code class="bg-gray-100 px-1 rounded">{{ '{{clipboard}}' }}</code>
+            <code class="bg-gray-100 px-1 rounded">{{ '{{fields.name}}' }}</code>
+            <code class="bg-gray-100 px-1 rounded">{{ '{{url}}' }}</code>
+            <code class="bg-gray-100 px-1 rounded">{{ '{{title}}' }}</code>
+            <code class="bg-gray-100 px-1 rounded">{{ '{{_input | tojson}}' }}</code> (all)
+        </p>
+    </div>
+</div>
+
+<!-- Response & Output -->
+<div class="bg-white rounded-lg border p-4 mb-4">
+    <h2 class="text-sm font-semibold text-gray-700 mb-3">Response &amp; Output</h2>
+
+    {% set _mapping = _tc.response_mapping if _tc else '' %}
+    {% set _cat = workflow.category | default('text', boolean=True) %}
+    {% set _action = workflow.output_action | default('replace_selection', boolean=True) %}
+
+    <div class="grid grid-cols-2 gap-3 mb-3">
+        <div>
+            <label class="block text-sm text-gray-600 mb-1">Response Mapping</label>
+            <input type="text" name="response_mapping"
+                value="{{ _mapping }}"
+                class="w-full border rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500"
+                placeholder="$.choices[0].message.content">
+            <p class="text-xs text-gray-400 mt-1">JSONPath to the result text in the response.</p>
+        </div>
+        <div>
+            <label class="block text-sm text-gray-600 mb-1">Category</label>
+            <select name="category" class="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+                <option value="text" {{ 'selected' if _cat == 'text' else '' }}>Text</option>
+                <option value="translation" {{ 'selected' if _cat == 'translation' else '' }}>Translation</option>
+                <option value="code" {{ 'selected' if _cat == 'code' else '' }}>Code</option>
+                <option value="automation" {{ 'selected' if _cat == 'automation' else '' }}>Automation</option>
+                <option value="other" {{ 'selected' if _cat not in ('text', 'translation', 'code', 'automation') else '' }}>Other</option>
+            </select>
+        </div>
+    </div>
+
+    <div class="grid grid-cols-2 gap-3">
+        <div>
+            <label class="block text-sm text-gray-600 mb-1">Output Action</label>
+            <select name="output_action" class="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+                <option value="replace_selection" {{ 'selected' if _action == 'replace_selection' else '' }}>Replace Selection</option>
+                <option value="clipboard" {{ 'selected' if _action == 'clipboard' else '' }}>Copy to Clipboard</option>
+                <option value="notification" {{ 'selected' if _action == 'notification' else '' }}>Notification</option>
+                <option value="none" {{ 'selected' if _action == 'none' else '' }}>None</option>
+            </select>
+        </div>
+        <div>
+            <label class="block text-sm text-gray-600 mb-1">Hotkey (optional)</label>
+            <input type="text" name="default_hotkey"
+                value="{{ workflow.default_hotkey | default('', boolean=True) }}"
+                class="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                placeholder="e.g. ctrl+shift+r">
+        </div>
+    </div>
+
+    {% if edit_mode %}
+    <div class="mt-3">
+        <label class="flex items-center gap-2 text-sm text-gray-600">
+            <input type="checkbox" name="is_active" {{ 'checked' if workflow and workflow.is_active else '' }} class="rounded border-gray-300">
+            Active
+        </label>
+    </div>
+    {% endif %}
+</div>
+
+<script>
+    // JSON header validation
+    const headersEl = document.getElementById('target-headers');
+    const headersHint = document.getElementById('headers-hint');
+    headersEl.addEventListener('blur', function() {
+        const val = this.value.trim();
+        if (!val || val.startsWith('{')) {
+            try {
+                if (val) JSON.parse(val);
+                this.classList.remove('border-red-400');
+                headersHint.classList.remove('text-red-400');
+            } catch (e) {
+                this.classList.add('border-red-400');
+                headersHint.textContent = 'Invalid JSON — fix before saving.';
+                headersHint.classList.add('text-red-400');
+            }
+        }
+    });
+</script>
