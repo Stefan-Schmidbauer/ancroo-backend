@@ -412,20 +412,24 @@ async def import_workflow(session: AsyncSession, meta: dict) -> ImportResult:
 
     # --- Build recipe ---
 
-    sources = meta.get("input_sources", ["text_selection"])
-
-    if "audio" in sources:
-        recipe = build_recipe(
-            sources,
-            file_config={
-                "accept": meta.get("audio_accept", "audio/*"),
-                "max_size_mb": meta.get("audio_max_size_mb", 50),
-                "label": meta.get("audio_label", "Audio recording"),
-                "required": True,
-            },
-        )
+    if meta.get("recipe"):
+        # Direct recipe from workflow JSON (e.g. ancroo-runner workflows)
+        recipe = meta["recipe"]
     else:
-        recipe = build_recipe(sources)
+        sources = meta.get("input_sources", ["text_selection"])
+
+        if "audio" in sources:
+            recipe = build_recipe(
+                sources,
+                file_config={
+                    "accept": meta.get("audio_accept", "audio/*"),
+                    "max_size_mb": meta.get("audio_max_size_mb", 50),
+                    "label": meta.get("audio_label", "Audio recording"),
+                    "required": True,
+                },
+            )
+        else:
+            recipe = build_recipe(sources)
 
     # --- Build target_config ---
 
@@ -443,6 +447,9 @@ async def import_workflow(session: AsyncSession, meta: dict) -> ImportResult:
         form_fields = meta.get("form_fields", [])
         recipe = build_recipe(sources, form_fields if form_fields else None)
         target_config = build_n8n_target("")
+    elif meta.get("target_config"):
+        # Custom workflows with direct target_config (e.g. ancroo-runner plugins)
+        target_config = meta["target_config"]
     else:
         target_config = {}
 
