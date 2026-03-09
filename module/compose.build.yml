@@ -1,12 +1,12 @@
-# Build from source when module is cloned into modules/ancroo/.
+# Build from source when module is cloned into modules/ancroo-backend/.
 # module.sh does NOT auto-load this file.
-# To use: add modules/ancroo/compose.build.yml to COMPOSE_FILE in .env
+# To use: add modules/ancroo-backend/compose.build.yml to COMPOSE_FILE in .env
 
 services:
   ancroo-backend:
     image: ghcr.io/stefan-schmidbauer/ancroo-backend:latest
     build:
-      context: ./modules/ancroo
+      context: ./modules/ancroo-backend
       dockerfile: Dockerfile
       args:
         BUILD_COMMIT: ${BUILD_COMMIT:-dev}

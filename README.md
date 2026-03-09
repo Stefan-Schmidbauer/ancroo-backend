@@ -77,13 +77,13 @@ From the **ancroo-backend** directory, run the install script and point it to yo
 ./install-stack.sh /path/to/ancroo-stack
 ```
 
-This copies the module files into `modules/ancroo/` and optionally enables the module right away.
+This symlinks the module directory into `modules/ancroo-backend/` and optionally enables the module right away.
 
 **Manual enable (if you skipped it during install):**
 
 ```bash
 cd /path/to/ancroo-stack
-./module.sh enable ancroo
+./module.sh enable ancroo-backend
 ```
 
 **What happens during enable:**
@@ -115,8 +115,8 @@ curl -X POST http://localhost:8900/admin/api/import-workflow \
 
 ```bash
 cd /path/to/ancroo-stack
-./module.sh disable ancroo
-rm -rf modules/ancroo/
+./module.sh disable ancroo-backend
+rm -rf modules/ancroo-backend/
 ```
 
 ---

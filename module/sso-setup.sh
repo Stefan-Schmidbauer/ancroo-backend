@@ -1,6 +1,6 @@
 #!/bin/bash
 # Ancroo SSO Setup — Creates Keycloak OAuth2 client for Ancroo
-# Called by sso-hook.sh when ancroo module is registered with SSO.
+# Called by sso-hook.sh when ancroo-backend module is registered with SSO.
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

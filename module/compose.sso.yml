@@ -2,12 +2,12 @@ services:
   ancroo-backend:
     labels:
       # API + health: no forward-auth (extension uses Bearer tokens)
-      - "traefik.http.routers.ancroo-api.rule=Host(`${ANCROO_DOMAIN}`) && (PathPrefix(`/api`) || Path(`/health`))"
-      - "traefik.http.routers.ancroo-api.entrypoints=websecure"
-      - "traefik.http.routers.ancroo-api.tls=true"
-      - "traefik.http.routers.ancroo-api.priority=200"
+      - "traefik.http.routers.ancroo-backend-api.rule=Host(`${ANCROO_DOMAIN}`) && (PathPrefix(`/api`) || Path(`/health`))"
+      - "traefik.http.routers.ancroo-backend-api.entrypoints=websecure"
+      - "traefik.http.routers.ancroo-backend-api.tls=true"
+      - "traefik.http.routers.ancroo-backend-api.priority=200"
       # Everything else: forward-auth (browser UI)
-      - "traefik.http.routers.ancroo.middlewares=keycloak-forward-auth"
+      - "traefik.http.routers.ancroo-backend.middlewares=keycloak-forward-auth"
     environment:
       - AUTH_ENABLED=true
       # External issuer for JWT verification + browser auth URL derivation

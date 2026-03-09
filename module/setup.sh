@@ -5,7 +5,7 @@
 # then configures the n8n API key for workflow integration.
 #
 # This script can be re-run at any time via:
-#   ./module.sh setup ancroo
+#   ./module.sh setup ancroo-backend
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -116,7 +116,7 @@ else
     else
         print_warning "n8n API key not found"
         echo "  Enable the n8n module first (creates the key automatically),"
-        echo "  then re-run: ./module.sh setup ancroo"
+        echo "  then re-run: ./module.sh setup ancroo-backend"
     fi
 fi
 
