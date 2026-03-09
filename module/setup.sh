@@ -79,6 +79,19 @@ fi
 if [[ -n "${ANCROO_BACKENDS_INPUT:-}" ]]; then
     set_env_value "ANCROO_BACKENDS" "$ANCROO_BACKENDS_INPUT"
     print_info "Workflow backends: $ANCROO_BACKENDS_INPUT"
+else
+    # Derive from GPU_MODE if no explicit input (e.g. manual module enable)
+    _gpu_mode=$(get_env_value "GPU_MODE")
+    case "$_gpu_mode" in
+        rocm)   _derived_backends="rocm" ;;
+        nvidia) _derived_backends="cuda" ;;
+        *)      _derived_backends="cuda" ;;
+    esac
+    current_backends=$(get_env_value "ANCROO_BACKENDS")
+    if [[ "$current_backends" != "$_derived_backends" ]]; then
+        set_env_value "ANCROO_BACKENDS" "$_derived_backends"
+        print_info "Workflow backends derived from GPU_MODE=$_gpu_mode: $_derived_backends"
+    fi
 fi
 
 # --- Whisper-ROCm Auto-Detection ---

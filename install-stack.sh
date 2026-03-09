@@ -8,7 +8,7 @@
 # directory, then enables the module. The Docker image is pulled from ghcr.io.
 #
 # To uninstall, run from the Ancroo Stack directory:
-#   ./module.sh disable ancroo-backend && rm -rf modules/ancroo-backend/
+#   ./module.sh disable ancroo-backend && rm modules/ancroo-backend
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -47,7 +47,13 @@ if [[ -L "$TARGET_DIR" || -d "$TARGET_DIR" ]]; then
             exit 0
         fi
     fi
-    rm -rf "$TARGET_DIR"
+    # Remove safely: if TARGET_DIR is a symlink, rm -rf would follow it
+    # and delete files in the source repo. Use rm -f for symlinks instead.
+    if [[ -L "$TARGET_DIR" ]]; then
+        rm -f "$TARGET_DIR"
+    else
+        rm -rf "$TARGET_DIR"
+    fi
 fi
 
 # ─── Symlink module directory ─────────────────────────────────
