@@ -14,7 +14,7 @@ services:
       - OLLAMA_CUDA_DEFAULT_MODEL=${ANCROO_OLLAMA_MODEL:-mistral:7b}
       - OLLAMA_ROCM_DEFAULT_MODEL=${ANCROO_OLLAMA_MODEL:-mistral:7b}
       - WHISPER_BASE_URL=${ANCROO_WHISPER_URL:-http://speaches:8000}
-      - WHISPER_MODEL=${ANCROO_WHISPER_MODEL:-Systran/faster-whisper-large-v3-turbo}
+      - WHISPER_MODEL=${ANCROO_WHISPER_MODEL:-Systran/faster-whisper-large-v3}
       - WHISPER_ROCM_BASE_URL=${ANCROO_WHISPER_ROCM_URL:-}
       - WHISPER_ROCM_MODEL=${ANCROO_WHISPER_ROCM_MODEL:-openai/whisper-large-v3-turbo}
       - ANCROO_BACKENDS=${ANCROO_BACKENDS:-cuda}
