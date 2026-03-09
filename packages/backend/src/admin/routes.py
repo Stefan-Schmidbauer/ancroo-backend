@@ -774,7 +774,7 @@ async def create_tool_provider(
         api_key=encrypt_api_key(api_key) if api_key else None,
     )
     db.add(provider)
-    await db.flush()
+    await db.commit()
     return RedirectResponse(f"/admin/tools/{provider.id}?flash=created", status_code=303)
 
 
@@ -838,7 +838,7 @@ async def update_tool_provider(
         provider.api_key = encrypt_api_key(api_key)
     provider.is_active = is_active == "on"
 
-    await db.flush()
+    await db.commit()
     return RedirectResponse(f"/admin/tools/{provider_id}?flash=updated", status_code=303)
 
 
@@ -850,7 +850,7 @@ async def delete_tool_provider(provider_id: UUID, db: DbSession):
         raise HTTPException(status_code=404, detail="Tool provider not found")
 
     await db.delete(provider)
-    await db.flush()
+    await db.commit()
     return RedirectResponse("/admin/tools?flash=deleted", status_code=303)
 
 
@@ -1038,7 +1038,7 @@ async def create_llm_provider(
         default_model=default_model or None,
     )
     db.add(provider)
-    await db.flush()
+    await db.commit()
     return RedirectResponse(f"/admin/llm-providers/{provider.id}?flash=created", status_code=303)
 
 
@@ -1101,7 +1101,7 @@ async def update_llm_provider(
     provider.default_model = default_model or None
     provider.is_active = is_active == "on"
 
-    await db.flush()
+    await db.commit()
     return RedirectResponse(f"/admin/llm-providers/{provider_id}?flash=updated", status_code=303)
 
 
@@ -1112,7 +1112,7 @@ async def delete_llm_provider(provider_id: UUID, db: DbSession):
     if not provider:
         raise HTTPException(status_code=404, detail="LLM provider not found")
     await db.delete(provider)
-    await db.flush()
+    await db.commit()
     return RedirectResponse("/admin/llm-providers?flash=deleted", status_code=303)
 
 
@@ -1206,7 +1206,7 @@ async def create_stt_provider(
         default_model=default_model,
     )
     db.add(provider)
-    await db.flush()
+    await db.commit()
     return RedirectResponse(f"/admin/stt-providers/{provider.id}?flash=created", status_code=303)
 
 
@@ -1269,7 +1269,7 @@ async def update_stt_provider(
     provider.default_model = default_model
     provider.is_active = is_active == "on"
 
-    await db.flush()
+    await db.commit()
     return RedirectResponse(f"/admin/stt-providers/{provider_id}?flash=updated", status_code=303)
 
 
@@ -1280,7 +1280,7 @@ async def delete_stt_provider(provider_id: UUID, db: DbSession):
     if not provider:
         raise HTTPException(status_code=404, detail="STT provider not found")
     await db.delete(provider)
-    await db.flush()
+    await db.commit()
     return RedirectResponse("/admin/stt-providers?flash=deleted", status_code=303)
 
 
