@@ -7,7 +7,7 @@
 
 > **Early stage** — Ancroo Backend is under active development and intended for local/trusted networks only. Do not expose to the public internet without security measures.
 
-The backend service that powers the [Ancroo browser extension](https://github.com/Stefan-Schmidbauer/ancroo-web). It receives text (or audio) from the extension, runs it through an AI workflow, and sends the result back — all self-hosted on your own machine or server.
+The backend service that powers the [Ancroo browser extension](https://github.com/ancroo/ancroo-web). It receives text (or audio) from the extension, runs it through an AI workflow, and sends the result back — all self-hosted on your own machine or server.
 
 ## How It Works
 
@@ -69,7 +69,7 @@ The server connects to AI services you already run locally — primarily [Ollama
 
 ### Ancroo Stack Module
 
-Deploy Ancroo Backend as a module of [Ancroo Stack](https://github.com/Stefan-Schmidbauer/ancroo-stack). This integrates it with the shared PostgreSQL database, Ollama, Whisper STT, and optional SSO.
+Deploy Ancroo Backend as a module of [Ancroo Stack](https://github.com/ancroo/ancroo-stack). This integrates it with the shared PostgreSQL database, Ollama, Whisper STT, and optional SSO.
 
 From the **ancroo-backend** directory, run the install script and point it to your Ancroo Stack installation:
 
@@ -184,11 +184,11 @@ uvicorn src.main:app --reload
 
 ## Contributing
 
-Contributions are welcome! Feel free to open an [issue](https://github.com/Stefan-Schmidbauer/ancroo-backend/issues) or submit a pull request.
+Contributions are welcome! Feel free to open an [issue](https://github.com/ancroo/ancroo-backend/issues) or submit a pull request.
 
 ## Security
 
-To report a security vulnerability, please use [GitHub's private vulnerability reporting](https://github.com/Stefan-Schmidbauer/ancroo-backend/security/advisories/new) instead of opening a public issue.
+To report a security vulnerability, please use [GitHub's private vulnerability reporting](https://github.com/ancroo/ancroo-backend/security/advisories/new) instead of opening a public issue.
 
 ## License
 

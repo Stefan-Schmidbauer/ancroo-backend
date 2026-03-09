@@ -104,5 +104,5 @@ def get_version_info() -> dict[str, str]:
         "commit": _get_commit(),
         "author": "Stefan Schmidbauer",
         "license": "AGPL-3.0",
-        "repository": "https://github.com/Stefan-Schmidbauer/ancroo-backend",
+        "repository": "https://github.com/ancroo/ancroo-backend",
     }

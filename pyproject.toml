@@ -10,4 +10,4 @@ authors = [
 readme = "README.md"
 
 [project.urls]
-Repository = "https://github.com/Stefan-Schmidbauer/ancroo-backend"
+Repository = "https://github.com/ancroo/ancroo-backend"
