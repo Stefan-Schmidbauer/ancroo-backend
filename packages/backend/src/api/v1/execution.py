@@ -65,6 +65,7 @@ async def execute_workflow(
     # Prepare input data — support both legacy and new format
     input_data = {
         "text": request.input_data.text,
+        "html": request.input_data.html,
         "context": request.input_data.context,
     }
     if request.input_data.clipboard:
@@ -229,6 +230,7 @@ async def execute_workflow_with_file(
         # Build input data with file info
         exec_input = {
             "text": parsed_input.get("text", ""),
+            "html": parsed_input.get("html", ""),
             "context": parsed_input.get("context", {}),
             "file_path": actual_path,
             "file_info": {

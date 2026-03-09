@@ -84,7 +84,7 @@ async def execute_pipeline(
             step_type = step.get("type", "llm")
 
             if step_type == "llm":
-                current_text = await _execute_llm_step(step, current_text, context)
+                current_text = await _execute_llm_step(step, current_text, context, input_data)
             elif step_type == "transform":
                 current_text = _execute_transform_step(step, current_text)
             else:
@@ -147,7 +147,10 @@ async def execute_pipeline(
 
 
 async def _execute_llm_step(
-    step: dict[str, Any], text: str, context: dict[str, Any]
+    step: dict[str, Any],
+    text: str,
+    context: dict[str, Any],
+    input_data: dict[str, Any] | None = None,
 ) -> str:
     """Execute an LLM pipeline step.
 
@@ -155,6 +158,7 @@ async def _execute_llm_step(
         step: Step config with 'model', 'prompt_template', 'temperature'
         text: Current text
         context: Additional context (url, title, etc.)
+        input_data: Full input data dict (for accessing html, etc.)
 
     Returns:
         LLM-generated text.
@@ -165,6 +169,8 @@ async def _execute_llm_step(
 
     # Build template variables
     variables = {"text": text, **context}
+    if input_data:
+        variables["html"] = input_data.get("html", "")
 
     prompt = _render_prompt(prompt_template, variables)
     return await ollama_generate(

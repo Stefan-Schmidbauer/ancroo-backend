@@ -108,6 +108,7 @@ class ExecutionInput(BaseModel):
     """Input data for workflow execution."""
 
     text: Optional[str] = None
+    html: Optional[str] = None
     clipboard: Optional[str] = None
     fields: Optional[dict[str, str]] = None
     context: dict[str, Any] = Field(default_factory=dict)

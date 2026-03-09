@@ -45,7 +45,7 @@ def _json_escape(value: str) -> str:
 def _render_payload(template_str: str, input_data: dict[str, Any]) -> str:
     """Render a Jinja2 payload template with input data.
 
-    Available variables: text, clipboard, fields, context, url, title,
+    Available variables: text, html, clipboard, fields, context, url, title,
     and a special _input variable containing the full input dict.
 
     String values are JSON-escaped so that newlines, quotes, and other
@@ -55,12 +55,14 @@ def _render_payload(template_str: str, input_data: dict[str, Any]) -> str:
     template = env.from_string(template_str)
 
     text = input_data.get("text", "")
+    html = input_data.get("html", "")
     clipboard = input_data.get("clipboard", "")
     context = input_data.get("context", {})
 
     # Build template variables — escape strings for safe JSON embedding
     variables = {
         "text": _json_escape(text),
+        "html": _json_escape(html),
         "clipboard": _json_escape(clipboard),
         "fields": input_data.get("fields", {}),
         "context": context,
@@ -187,7 +189,7 @@ async def execute_http_workflow(
         if preset == "n8n":
             raise HttpExecutionError(
                 "n8n webhook not configured. "
-                "Run './module.sh setup ancroo' or configure the webhook URL in the admin panel."
+                "Run './module.sh setup ancroo-backend' or configure the webhook URL in the admin panel."
             )
         raise HttpExecutionError("Workflow has no target URL configured")
 
