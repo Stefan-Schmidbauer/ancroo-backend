@@ -1,6 +1,6 @@
 services:
   ancroo-backend:
-    image: ghcr.io/stefan-schmidbauer/ancroo-backend:latest
+    image: ghcr.io/ancroo/ancroo-backend:latest
     container_name: ancroo-backend
     restart: unless-stopped
     environment:
