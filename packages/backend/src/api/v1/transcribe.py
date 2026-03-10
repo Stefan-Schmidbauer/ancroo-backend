@@ -130,10 +130,12 @@ async def transcribe(
                 )
 
         # Build target config for the STT server
+        # Language priority: client request > provider default > None (auto-detect)
+        effective_language = language if language else provider.default_language
         target = _whisper_build_target(
             base_url=provider.base_url,
             model=model,
-            language=language if language else None,
+            language=effective_language or None,
             timeout=300,
         )
 

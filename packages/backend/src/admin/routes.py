@@ -140,6 +140,7 @@ async def workflow_llm_models(
     request: Request,
     db: DbSession,
     llm_provider_id: UUID | None = Query(None),
+    selected: str = Query(""),
 ):
     """HTMX: Return <option> elements for available LLM models of the selected provider."""
     fallback = '<option value="">-- uses provider default --</option>'
@@ -160,7 +161,8 @@ async def workflow_llm_models(
         return HTMLResponse('<option value="">-- could not load models --</option>')
     options = empty
     for model in models:
-        options += f'<option value="{model}">{model}</option>'
+        sel = ' selected' if model == selected else ''
+        options += f'<option value="{model}"{sel}>{model}</option>'
     return HTMLResponse(options)
 
 
@@ -276,6 +278,7 @@ async def create_workflow_route(
             category=category, output_type=output_action,
             pipeline_steps=steps, created_by=user.id,
         )
+        await db.commit()
         return RedirectResponse(f"/admin/workflows/{workflow.slug}?flash=created", status_code=303)
 
     workflow = await service.create_workflow(
@@ -295,6 +298,7 @@ async def create_workflow_route(
         stt_provider_id=parsed_stt_provider_id,
         stt_model=stt_model.strip() or None,
     )
+    await db.commit()
     return RedirectResponse(f"/admin/workflows/{workflow.slug}?flash=created", status_code=303)
 
 
@@ -627,6 +631,7 @@ async def update_workflow(
     if not workflow:
         raise HTTPException(status_code=404, detail="Workflow not found")
 
+    await db.commit()
     return RedirectResponse(f"/admin/workflows/{workflow.slug}?flash=updated", status_code=303)
 
 
@@ -638,6 +643,7 @@ async def delete_workflow(slug: str, db: DbSession):
     deleted = await service.delete_workflow(db, slug)
     if not deleted:
         raise HTTPException(status_code=404, detail="Workflow not found")
+    await db.commit()
     return RedirectResponse("/admin/?flash=deleted", status_code=303)
 
 
@@ -1195,6 +1201,7 @@ async def create_stt_provider(
     base_url: str = Form(...),
     api_key: str = Form(""),
     default_model: str = Form(...),
+    default_language: str = Form(""),
 ):
     """Create a new STT provider."""
     validate_provider_url(base_url)
@@ -1204,6 +1211,7 @@ async def create_stt_provider(
         base_url=base_url,
         api_key=encrypt_api_key(api_key) if api_key else None,
         default_model=default_model,
+        default_language=default_language.strip() or None,
     )
     db.add(provider)
     await db.commit()
@@ -1254,6 +1262,7 @@ async def update_stt_provider(
     base_url: str = Form(...),
     api_key: str = Form(""),
     default_model: str = Form(...),
+    default_language: str = Form(""),
     is_active: str = Form("off"),
 ):
     """Update an STT provider."""
@@ -1267,6 +1276,7 @@ async def update_stt_provider(
     if api_key:
         provider.api_key = encrypt_api_key(api_key)
     provider.default_model = default_model
+    provider.default_language = default_language.strip() or None
     provider.is_active = is_active == "on"
 
     await db.commit()

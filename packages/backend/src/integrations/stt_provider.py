@@ -105,13 +105,15 @@ def build_runtime_stt_target(
     Called by http_executor when workflow.stt_provider_id is set.
     The workflow's target_config is expected to contain at minimum:
       _preset: "stt" or "whisper"
-      _language: optional language code
+      _language: optional language code (overrides provider default)
       timeout: int (default 120)
+
+    Language priority: workflow _language > provider default_language > None (auto-detect).
 
     Returns a complete target_config dict ready for http_executor.
     """
     model = stt_model or provider.default_model
-    raw_lang = workflow_target_config.get("_language") or None
+    raw_lang = workflow_target_config.get("_language") or provider.default_language or None
     language = None if raw_lang and raw_lang.lower() == "none" else raw_lang
     timeout = int(workflow_target_config.get("timeout", 120))
 

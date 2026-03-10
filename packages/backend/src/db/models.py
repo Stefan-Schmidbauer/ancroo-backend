@@ -173,6 +173,10 @@ class STTProvider(Base):
         String(255), nullable=False,
         comment="Default model name, e.g. 'Systran/faster-whisper-large-v3'"
     )
+    default_language: Mapped[Optional[str]] = mapped_column(
+        String(10),
+        comment="Default ISO 639-1 language code (e.g. 'de', 'en'). Null = auto-detect."
+    )
     config: Mapped[Optional[dict]] = mapped_column(
         JSONB, default=dict, server_default="{}",
         comment="Provider-specific additional configuration"

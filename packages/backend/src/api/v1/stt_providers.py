@@ -34,6 +34,7 @@ class STTProviderResponse(BaseModel):
     base_url: str
     api_key_set: bool
     default_model: str
+    default_language: Optional[str] = None
     config: dict[str, Any] = Field(default_factory=dict)
     is_active: bool
     is_default: bool
@@ -54,6 +55,7 @@ class STTProviderResponse(BaseModel):
             base_url=model.base_url,
             api_key_set=bool(model.api_key),
             default_model=model.default_model,
+            default_language=model.default_language,
             config=model.config or {},
             is_active=model.is_active,
             is_default=model.is_default,
@@ -77,6 +79,9 @@ class CreateSTTProviderRequest(BaseModel):
     base_url: str
     api_key: Optional[str] = None
     default_model: str
+    default_language: Optional[str] = Field(
+        None, description="ISO 639-1 language code (e.g. 'de', 'en'). Null = auto-detect."
+    )
     config: dict[str, Any] = Field(default_factory=dict)
     is_active: bool = True
     is_default: bool = False
@@ -87,6 +92,7 @@ class UpdateSTTProviderRequest(BaseModel):
     base_url: Optional[str] = None
     api_key: Optional[str] = None
     default_model: Optional[str] = None
+    default_language: Optional[str] = None
     config: Optional[dict[str, Any]] = None
     is_active: Optional[bool] = None
     is_default: Optional[bool] = None
@@ -179,6 +185,7 @@ async def create_stt_provider(
         base_url=request.base_url,
         api_key=encrypt_api_key(request.api_key) if request.api_key else None,
         default_model=request.default_model,
+        default_language=request.default_language or None,
         config=request.config,
         is_active=request.is_active,
         is_default=request.is_default,
@@ -214,6 +221,8 @@ async def update_stt_provider(
         model.api_key = encrypt_api_key(request.api_key) if request.api_key else None
     if request.default_model is not None:
         model.default_model = request.default_model
+    if request.default_language is not None:
+        model.default_language = request.default_language or None
     if request.config is not None:
         model.config = request.config
     if request.is_active is not None:
