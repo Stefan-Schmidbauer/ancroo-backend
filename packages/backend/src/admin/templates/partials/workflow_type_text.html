@@ -25,10 +25,11 @@
         <div>
             <label class="block text-sm text-gray-600 mb-1">LLM Provider</label>
             <select name="llm_provider_id" required
-                hx-get="/admin/workflows/new/llm-models"
+                hx-get="/admin/workflows/new/llm-models?selected={{ workflow.llm_model | default('', boolean=True) | urlencode }}"
                 hx-target="#llm-model-select"
                 hx-swap="innerHTML"
                 hx-include="[name='llm_provider_id']"
+                {% if edit_mode and workflow and workflow.llm_provider_id %}hx-trigger="load, change"{% endif %}
                 class="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
                 <option value="">— Select LLM Provider —</option>
                 {% for p in llm_providers %}

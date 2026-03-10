@@ -6,7 +6,7 @@ services:
   ancroo-backend:
     image: ghcr.io/ancroo/ancroo-backend:latest
     build:
-      context: ./modules/ancroo-backend
+      context: ../ancroo-backend
       dockerfile: Dockerfile
       args:
         BUILD_COMMIT: ${BUILD_COMMIT:-dev}

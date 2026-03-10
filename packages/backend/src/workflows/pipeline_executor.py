@@ -92,16 +92,8 @@ async def execute_pipeline(
                     f"Unknown step type: {step_type}", step_index=i
                 )
 
-        # Determine output action from workflow config
-        output_action = workflow.output_type or "replace_selection"
-        # Map output_type values to action names
-        action_map = {
-            "clipboard": "replace_selection",
-            "replace_selection": "replace_selection",
-            "notification": "show_notification",
-            "window": "show_notification",
-        }
-        action = action_map.get(output_action, "replace_selection")
+        # Determine output action — prefer output_action, fall back to output_type
+        action = workflow.output_action or workflow.output_type or "replace_selection"
 
         end_time = datetime.now(timezone.utc)
         duration_ms = int((end_time - start_time).total_seconds() * 1000)
