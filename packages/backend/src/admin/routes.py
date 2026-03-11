@@ -183,6 +183,7 @@ async def create_workflow_route(
     trigger_flow_url: str = Form(""),
     input_sources: str = Form("text_selection"),
     form_fields_json: str = Form("[]"),
+    output_fields_json: str = Form("[]"),
     # Custom fields
     target_url: str = Form(""),
     target_method: str = Form("POST"),
@@ -225,7 +226,12 @@ async def create_workflow_route(
         output_action_val = "replace_selection"
 
     elif workflow_type == "workflow_trigger":
-        recipe = build_recipe(sources, form_fields if form_fields else None)
+        try:
+            output_fields = json.loads(output_fields_json)
+        except json.JSONDecodeError:
+            output_fields = []
+        recipe = build_recipe(sources, form_fields if form_fields else None,
+                              output_fields if output_fields else None)
         target_config = build_n8n_target(trigger_flow_url)
         output_action_val = output_action
 
@@ -414,37 +420,17 @@ async def workflow_detail(request: Request, slug: str, db: DbSession):
     })
 
 
-@router.get("/workflows/{slug}/demo", response_class=HTMLResponse)
+@router.get("/workflows/{slug}/demo")
 async def workflow_demo(request: Request, slug: str, db: DbSession):
-    """Serve a demo page with form fields for testing the workflow via the extension."""
+    """Redirect to the static demo page for a workflow."""
     workflow = await service.get_workflow(db, slug)
     if not workflow:
         raise HTTPException(status_code=404, detail="Workflow not found")
 
-    # Build form fields from recipe
-    raw_fields = (workflow.recipe or {}).get("form_fields", [])
-    form_fields = []
-    for f in raw_fields:
-        name = f.get("name", "")
-        form_fields.append({
-            "name": name,
-            "label": f.get("label", name.replace("_", " ").title()),
-            "type": f.get("type", "email" if "email" in name else "text"),
-            "placeholder": f.get("placeholder", ""),
-            "value": f.get("default", ""),
-            "options": f.get("options", []),
-        })
+    if not workflow.demo_url:
+        raise HTTPException(status_code=404, detail="No demo page configured for this workflow")
 
-    # Fallback: single text field if no form_fields defined
-    if not form_fields:
-        form_fields = [{"name": "text", "label": "Text", "type": "textarea",
-                        "placeholder": "Enter text...", "value": "", "options": []}]
-
-    return templates.TemplateResponse("workflow_demo.html", {
-        "request": request,
-        "workflow": workflow,
-        "form_fields": form_fields,
-    })
+    return RedirectResponse(url=f"/demos/{slug}/{workflow.demo_url}")
 
 
 @router.get("/workflows/{slug}/edit", response_class=HTMLResponse)
@@ -522,6 +508,7 @@ async def update_workflow(
     trigger_flow_url: str = Form(""),
     input_sources: str = Form("text_selection"),
     form_fields_json: str = Form("[]"),
+    output_fields_json: str = Form("[]"),
     # Custom fields
     target_url: str = Form(""),
     target_method: str = Form("POST"),
@@ -557,7 +544,12 @@ async def update_workflow(
             form_fields = json.loads(form_fields_json)
         except json.JSONDecodeError:
             form_fields = []
-        recipe = build_recipe(sources, form_fields if form_fields else None)
+        try:
+            output_fields = json.loads(output_fields_json)
+        except json.JSONDecodeError:
+            output_fields = []
+        recipe = build_recipe(sources, form_fields if form_fields else None,
+                              output_fields if output_fields else None)
         target_config = build_n8n_target(trigger_flow_url)
         output_action_val = output_action
 

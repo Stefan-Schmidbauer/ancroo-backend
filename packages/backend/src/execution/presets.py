@@ -129,6 +129,7 @@ def build_stt_target(
 def build_recipe(
     sources: list[str],
     form_fields: list[dict] | None = None,
+    output_fields: list[dict] | None = None,
     file_config: dict | None = None,
 ) -> dict:
     """Build a collection recipe for the extension.
@@ -139,6 +140,8 @@ def build_recipe(
                         'page_context', 'file', 'audio'
         form_fields: Optional list of form field definitions
                      Each: {'name': str, 'selector': str}
+        output_fields: Optional list of output field definitions for fill_fields action
+                       Each: {'name': str, 'selector': str}
         file_config: Optional file/audio upload config
                      Keys: 'accept', 'max_size_mb', 'label', 'required'
 
@@ -148,6 +151,8 @@ def build_recipe(
     recipe = {"collect": sources}
     if form_fields and "form_fields" in sources:
         recipe["form_fields"] = form_fields
+    if output_fields:
+        recipe["output_fields"] = output_fields
     if file_config and ("file" in sources or "audio" in sources):
         recipe["file_config"] = file_config
     return recipe

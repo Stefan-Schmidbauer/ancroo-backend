@@ -445,7 +445,12 @@ async def import_workflow(session: AsyncSession, meta: dict) -> ImportResult:
         )
     elif "n8n" in requires:
         form_fields = meta.get("form_fields", [])
-        recipe = build_recipe(sources, form_fields if form_fields else None)
+        output_fields = meta.get("output_fields", [])
+        recipe = build_recipe(
+            sources,
+            form_fields if form_fields else None,
+            output_fields if output_fields else None,
+        )
         target_config = build_n8n_target("")
     elif meta.get("target_config"):
         # Custom workflows with direct target_config (e.g. ancroo-runner plugins)
@@ -465,6 +470,7 @@ async def import_workflow(session: AsyncSession, meta: dict) -> ImportResult:
         target_config=target_config,
         output_action=meta.get("output_action"),
         default_hotkey=meta.get("default_hotkey"),
+        demo_url=meta.get("demo_url"),
         input_type=meta.get("input_type", "text"),
         output_type=meta.get("output_type", "text"),
         execution_type=meta.get("execution_type", "tool"),
