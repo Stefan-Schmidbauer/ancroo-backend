@@ -19,6 +19,9 @@ services:
       - WHISPER_ROCM_MODEL=${ANCROO_WHISPER_ROCM_MODEL:-openai/whisper-large-v3-turbo}
       - ANCROO_BACKENDS=${ANCROO_BACKENDS:-cuda}
       - CORS_ORIGINS=["chrome-extension://","http://localhost:8900"]
+      - WORKFLOWS_DIR=/data/workflows
+    volumes:
+      - ${ANCROO_WORKFLOWS_DIR:-../ancroo/workflows}:/data/workflows:ro
     networks:
       - ai-network
     depends_on:

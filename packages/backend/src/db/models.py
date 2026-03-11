@@ -296,6 +296,12 @@ class Workflow(Base):
     )
     timeout_seconds: Mapped[int] = mapped_column(Integer, default=60)
 
+    # Demo page URL (relative path, served from static /demos mount)
+    demo_url: Mapped[Optional[str]] = mapped_column(
+        String(255), nullable=True,
+        comment="Relative path to demo page, e.g. 'demo.html'. Served at /demos/{slug}/{path}"
+    )
+
     # Metadata
     version: Mapped[str] = mapped_column(String(20), default="1.0.0")
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)

@@ -49,6 +49,9 @@ class Settings(BaseSettings):
         """Parse ANCROO_BACKENDS into a set of backend identifiers."""
         return {b.strip().lower() for b in self.ancroo_backends.split(",") if b.strip()}
 
+    # Workflows directory (static demo pages served from /demos)
+    workflows_dir: str = ""
+
     # File upload settings
     max_upload_size_mb: int = 200
     upload_temp_dir: str = "/tmp/ancroo-uploads"

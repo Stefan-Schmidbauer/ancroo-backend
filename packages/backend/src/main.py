@@ -84,6 +84,12 @@ def create_app() -> FastAPI:
     static_dir = Path(__file__).parent / "static"
     app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
 
+    # Serve workflow demo pages as static files (if configured)
+    if settings.workflows_dir:
+        workflows_path = Path(settings.workflows_dir)
+        if workflows_path.is_dir():
+            app.mount("/demos", StaticFiles(directory=str(workflows_path)), name="demos")
+
     app.include_router(api_router, prefix="/api/v1")
     app.include_router(admin_router)
 
