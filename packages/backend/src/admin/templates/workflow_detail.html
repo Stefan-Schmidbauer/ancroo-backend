@@ -173,7 +173,7 @@
                 {% endif %}
             </dd>
             <dt class="text-gray-500">Output Action</dt>
-            <dd class="text-gray-900">{{ workflow.output_type }}</dd>
+            <dd class="text-gray-900">{{ workflow.output_action or workflow.output_type }}</dd>
             <dt class="text-gray-500">Timeout</dt>
             <dd class="text-gray-900">{{ workflow.timeout_seconds }}s</dd>
         </dl>

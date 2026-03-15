@@ -35,6 +35,11 @@
                     {{ 'checked' if 'page_context' in _eff else '' }}>
                 Page Context
             </label>
+            <label class="flex items-center gap-1.5 text-sm text-gray-700">
+                <input type="checkbox" value="manual_input" class="rounded border-gray-300 source-checkbox" onchange="updateSources()"
+                    {{ 'checked' if 'manual_input' in _eff else '' }}>
+                Manual Input
+            </label>
         </div>
         <input type="hidden" name="input_sources" id="input-sources"
             value="{{ _eff | join(',') }}">

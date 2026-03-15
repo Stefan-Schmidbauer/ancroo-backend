@@ -52,8 +52,11 @@
             <label class="block text-sm text-gray-600 mb-1">Action</label>
             <select name="output_action" class="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
                 <option value="replace_selection" {{ 'selected' if _action == 'replace_selection' else '' }}>Replace Selection</option>
+                <option value="insert_before" {{ 'selected' if _action == 'insert_before' else '' }}>Insert Before Selection</option>
+                <option value="insert_after" {{ 'selected' if _action == 'insert_after' else '' }}>Insert After Selection</option>
                 <option value="clipboard" {{ 'selected' if _action == 'clipboard' else '' }}>Copy to Clipboard</option>
                 <option value="fill_fields" {{ 'selected' if _action == 'fill_fields' else '' }}>Fill Fields</option>
+                <option value="side_panel_only" {{ 'selected' if _action == 'side_panel_only' else '' }}>Show in Side Panel</option>
                 <option value="notification" {{ 'selected' if _action in ('notification', 'show_notification') else '' }}>Notification</option>
                 <option value="none" {{ 'selected' if _action == 'none' else '' }}>None</option>
             </select>

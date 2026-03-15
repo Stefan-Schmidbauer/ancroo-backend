@@ -137,7 +137,7 @@ def build_recipe(
     Args:
         sources: List of input sources to collect
                  Valid: 'text_selection', 'clipboard', 'form_fields',
-                        'page_context', 'file', 'audio'
+                        'page_context', 'file', 'audio', 'manual_input'
         form_fields: Optional list of form field definitions
                      Each: {'name': str, 'selector': str}
         output_fields: Optional list of output field definitions for fill_fields action

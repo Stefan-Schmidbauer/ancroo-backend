@@ -217,26 +217,30 @@ async def create_workflow_route(
     parsed_llm_provider_id = UUID(llm_provider_id) if llm_provider_id else None
     parsed_stt_provider_id = UUID(stt_provider_id) if stt_provider_id else None
 
+    # Parse output fields (shared by all types that support fill_fields)
+    try:
+        output_fields = json.loads(output_fields_json)
+    except json.JSONDecodeError:
+        output_fields = []
+
     if workflow_type == "text_transformation":
-        recipe = build_recipe(["text_selection"])
+        recipe = build_recipe(sources, form_fields if form_fields else None,
+                              output_fields if output_fields else None)
         target_config = build_llm_target(
             prompt_template=prompt_template,
             temperature=temperature,
         )
-        output_action_val = "replace_selection"
+        output_action_val = output_action
 
     elif workflow_type == "workflow_trigger":
-        try:
-            output_fields = json.loads(output_fields_json)
-        except json.JSONDecodeError:
-            output_fields = []
         recipe = build_recipe(sources, form_fields if form_fields else None,
                               output_fields if output_fields else None)
         target_config = build_n8n_target(trigger_flow_url)
         output_action_val = output_action
 
     elif workflow_type == "custom":
-        recipe = build_recipe(sources, form_fields if form_fields else None)
+        recipe = build_recipe(sources, form_fields if form_fields else None,
+                              output_fields if output_fields else None)
         # Parse headers
         headers = {"Content-Type": "application/json"}
         if target_headers.strip():
@@ -530,36 +534,35 @@ async def update_workflow(
     parsed_llm_provider_id = UUID(llm_provider_id) if llm_provider_id else None
     parsed_stt_provider_id = UUID(stt_provider_id) if stt_provider_id else None
 
+    # Parse sources, form fields, and output fields (shared by all types)
+    sources = [s.strip() for s in input_sources.split(",") if s.strip()]
+    try:
+        form_fields = json.loads(form_fields_json)
+    except json.JSONDecodeError:
+        form_fields = []
+    try:
+        output_fields = json.loads(output_fields_json)
+    except json.JSONDecodeError:
+        output_fields = []
+
     if workflow_type == "text_transformation":
-        recipe = build_recipe(["text_selection"])
+        recipe = build_recipe(sources, form_fields if form_fields else None,
+                              output_fields if output_fields else None)
         target_config = build_llm_target(
             prompt_template=prompt_template,
             temperature=temperature,
         )
-        output_action_val = "replace_selection"
+        output_action_val = output_action
 
     elif workflow_type == "workflow_trigger":
-        sources = [s.strip() for s in input_sources.split(",") if s.strip()]
-        try:
-            form_fields = json.loads(form_fields_json)
-        except json.JSONDecodeError:
-            form_fields = []
-        try:
-            output_fields = json.loads(output_fields_json)
-        except json.JSONDecodeError:
-            output_fields = []
         recipe = build_recipe(sources, form_fields if form_fields else None,
                               output_fields if output_fields else None)
         target_config = build_n8n_target(trigger_flow_url)
         output_action_val = output_action
 
     elif workflow_type == "custom":
-        sources = [s.strip() for s in input_sources.split(",") if s.strip()]
-        try:
-            form_fields = json.loads(form_fields_json)
-        except json.JSONDecodeError:
-            form_fields = []
-        recipe = build_recipe(sources, form_fields if form_fields else None)
+        recipe = build_recipe(sources, form_fields if form_fields else None,
+                              output_fields if output_fields else None)
         headers = {"Content-Type": "application/json"}
         if target_headers.strip():
             try:
@@ -601,13 +604,17 @@ async def update_workflow(
         except json.JSONDecodeError:
             pipeline_steps = []
 
+    # For new workflow types, keep output_type in sync with output_action.
+    # Legacy pipeline workflows use output_type from the form directly.
+    effective_output_type = output_action_val if output_action_val else output_type
+
     workflow = await service.update_workflow(
         db=db,
         slug=slug,
         name=name,
         description=description,
         category=category,
-        output_type=output_type,
+        output_type=effective_output_type,
         pipeline_steps=pipeline_steps,
         is_active=is_active == "on",
         workflow_type=workflow_type or None,
@@ -1326,6 +1333,12 @@ async def stt_provider_list_models(request: Request, provider_id: UUID, db: DbSe
 
 
 # --- About ---
+
+
+@router.get("/demo", response_class=HTMLResponse)
+async def demo_page(request: Request):
+    """Demo page for testing text transformation workflows."""
+    return templates.TemplateResponse("demo.html", {"request": request})
 
 
 @router.get("/about", response_class=HTMLResponse)

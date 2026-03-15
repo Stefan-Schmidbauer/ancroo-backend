@@ -44,7 +44,10 @@
                     <select name="output_type" class="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
                         {% set current_out = workflow.output_type if workflow and workflow.output_type else 'replace_selection' %}
                         <option value="replace_selection" {{ 'selected' if current_out == 'replace_selection' }}>Replace Selection</option>
+                        <option value="insert_before" {{ 'selected' if current_out == 'insert_before' }}>Insert Before Selection</option>
+                        <option value="insert_after" {{ 'selected' if current_out == 'insert_after' }}>Insert After Selection</option>
                         <option value="clipboard" {{ 'selected' if current_out == 'clipboard' }}>Copy to Clipboard</option>
+                        <option value="side_panel_only" {{ 'selected' if current_out == 'side_panel_only' }}>Show in Side Panel</option>
                         <option value="notification" {{ 'selected' if current_out == 'notification' }}>Show Notification</option>
                     </select>
                 </div>

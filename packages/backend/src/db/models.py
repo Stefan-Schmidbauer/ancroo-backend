@@ -277,7 +277,7 @@ class Workflow(Base):
     # Output action — sent to extension (public)
     output_action: Mapped[Optional[str]] = mapped_column(
         String(30), nullable=True,
-        comment="'replace_selection', 'clipboard', 'notification', 'fill_fields', 'none'"
+        comment="'replace_selection', 'clipboard', 'notification', 'fill_fields', 'download_file', 'none'"
     )
 
     # Configuration

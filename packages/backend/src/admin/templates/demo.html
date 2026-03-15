@@ -1,0 +1,98 @@
+{% extends "base.html" %}
+{% block title %}Ancroo Admin - Demo Page{% endblock %}
+
+{% block content %}
+<div class="max-w-3xl">
+    <h1 class="text-lg font-semibold text-gray-900 mb-1">Demo Page</h1>
+    <p class="text-sm text-gray-500 mb-6">Test text transformation workflows here. Select text, then run a workflow from the Ancroo extension.</p>
+
+    <!-- Section 1: Simple Text Areas -->
+    <div class="bg-white rounded-lg border p-4 mb-4">
+        <h2 class="text-sm font-semibold text-gray-700 mb-3">Text Areas</h2>
+
+        <div class="mb-4">
+            <label class="block text-xs text-gray-500 mb-1">English text with errors (grammar fix)</label>
+            <textarea class="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-vertical"
+                rows="4">Their going to the store tommorow, but they dont no what too buy. The weater forecast says its going to rain, so they should probaly bring an umbrella. Me and him was thinking about going to the libary afterwards.</textarea>
+        </div>
+
+        <div class="mb-4">
+            <label class="block text-xs text-gray-500 mb-1">German text (translation / rewrite)</label>
+            <textarea class="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-vertical"
+                rows="4">Die künstliche Intelligenz verändert unsere Arbeitswelt grundlegend. Viele Aufgaben, die früher manuell erledigt wurden, können heute automatisiert werden. Das spart Zeit und reduziert Fehler, erfordert aber auch neue Kompetenzen.</textarea>
+        </div>
+
+        <div>
+            <label class="block text-xs text-gray-500 mb-1">Code snippet (code transformation)</label>
+            <textarea class="w-full border rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500 resize-vertical"
+                rows="5">def calcPrice(items,tax):
+    total=0
+    for i in items:
+        total=total+i['price']*i['qty']
+    total=total+(total*tax)
+    return total</textarea>
+        </div>
+    </div>
+
+    <!-- Section 2: Input Fields -->
+    <div class="bg-white rounded-lg border p-4 mb-4">
+        <h2 class="text-sm font-semibold text-gray-700 mb-3">Input Fields</h2>
+
+        <div class="grid grid-cols-2 gap-3 mb-3">
+            <div>
+                <label class="block text-xs text-gray-500 mb-1">Name</label>
+                <input type="text" value="max mustermann"
+                    class="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+            </div>
+            <div>
+                <label class="block text-xs text-gray-500 mb-1">Email</label>
+                <input type="text" value="Max.Mustermann@EXAMPLE.com"
+                    class="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+            </div>
+        </div>
+
+        <div class="mb-3">
+            <label class="block text-xs text-gray-500 mb-1">Address (multiline input)</label>
+            <input type="text" value="hauptstraße 42, 80331 münchen, deutschland"
+                class="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+        </div>
+
+        <div>
+            <label class="block text-xs text-gray-500 mb-1">Notes</label>
+            <input type="text" value="meeting mit hr. schmidt am montag um 14 uhr im konferenzraum b"
+                class="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+        </div>
+    </div>
+
+    <!-- Section 3: Contenteditable -->
+    <div class="bg-white rounded-lg border p-4 mb-4">
+        <h2 class="text-sm font-semibold text-gray-700 mb-3">Rich Text (contenteditable)</h2>
+
+        <div contenteditable="true"
+            class="border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 min-h-[100px]"
+            style="min-height: 100px;">
+            <p>This is a <strong>rich text</strong> area. You can select parts of this text and test workflows like:</p>
+            <ul style="margin: 8px 0; padding-left: 20px;">
+                <li><em>Replace Selection</em> — replaces what you selected</li>
+                <li><em>Insert Before</em> — adds text before your selection</li>
+                <li><em>Insert After</em> — adds text after your selection</li>
+            </ul>
+            <p>Try selecting just one word or an entire paragraph to see how each output action behaves.</p>
+        </div>
+    </div>
+
+    <!-- Hints -->
+    <div class="bg-blue-50 rounded-lg border border-blue-200 p-4 text-sm text-blue-800">
+        <p class="font-semibold mb-2">How to use</p>
+        <ol class="list-decimal list-inside space-y-1 text-xs">
+            <li>Select text in any field above</li>
+            <li>Open the Ancroo side panel (or use a hotkey)</li>
+            <li>Choose a text transformation workflow and execute it</li>
+            <li>The result depends on the workflow's output action: replace, insert before/after, clipboard, or side panel only</li>
+        </ol>
+        <p class="mt-3 text-xs">
+            <strong>Manual Input workflows</strong> don't need a selection — open the side panel and type your text directly.
+        </p>
+    </div>
+</div>
+{% endblock %}

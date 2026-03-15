@@ -306,13 +306,22 @@ async def execute_http_workflow(
         execution_log.duration_ms = duration_ms
         await db.flush()
 
+        metadata: dict[str, Any] = {"duration_ms": duration_ms}
+
+        # For download_file actions, pass filename and mime_type from upstream
+        if action == "download_file" and isinstance(response_data, dict):
+            if response_data.get("filename"):
+                metadata["filename"] = response_data["filename"]
+            if response_data.get("mime_type"):
+                metadata["mime_type"] = response_data["mime_type"]
+
         return {
             "text": result_text,
             "action": action,
             "success": True,
             "execution_log_id": str(execution_log.id),
             "duration_ms": duration_ms,
-            "metadata": {"duration_ms": duration_ms},
+            "metadata": metadata,
         }
 
     except httpx.HTTPStatusError as e:
