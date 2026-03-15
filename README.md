@@ -190,6 +190,27 @@ Contributions are welcome! Feel free to open an [issue](https://github.com/ancro
 
 To report a security vulnerability, please use [GitHub's private vulnerability reporting](https://github.com/ancroo/ancroo-backend/security/advisories/new) instead of opening a public issue.
 
+## Acknowledgments
+
+This project is built with the following open-source software:
+
+| Project | Purpose | License |
+|---------|---------|---------|
+| [FastAPI](https://fastapi.tiangolo.com/) | Web framework | MIT |
+| [SQLAlchemy](https://www.sqlalchemy.org/) | Database ORM | MIT |
+| [Alembic](https://alembic.sqlalchemy.org/) | Database migrations | MIT |
+| [Pydantic](https://docs.pydantic.dev/) | Data validation | MIT |
+| [PostgreSQL](https://www.postgresql.org/) | Database | PostgreSQL License |
+
+Ancroo Backend integrates with these external services (running in their own containers):
+
+| Service | Purpose | License |
+|---------|---------|---------|
+| [Ollama](https://ollama.com/) | Local LLM inference | MIT |
+| [OpenAI Whisper](https://github.com/openai/whisper) | Speech recognition models | MIT |
+| [Speaches](https://github.com/speaches-ai/speaches) | Whisper API server (CUDA) | MIT |
+| [n8n](https://n8n.io/) | Workflow automation | [Sustainable Use License](https://github.com/n8n-io/n8n/blob/master/LICENSE.md) |
+
 ## License
 
 AGPLv3 — see [LICENSE](LICENSE). The Ancroo name is not covered by this license and remains the property of the author.
