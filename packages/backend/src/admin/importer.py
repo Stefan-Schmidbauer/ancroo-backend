@@ -515,6 +515,19 @@ async def import_workflow(session: AsyncSession, meta: dict) -> ImportResult:
         # Custom workflows with direct target_config (e.g. AR plugin endpoints)
         tool = await _ensure_custom_tool(session, slug, meta["target_config"])
 
+    if meta.get("tool") and not tool:
+        # Tool block format (AR plugins, custom APIs) — map to target_config
+        tool_meta = meta["tool"]
+        target_config = {
+            "url": tool_meta.get("endpoint_url", ""),
+            "method": tool_meta.get("http_method", "POST"),
+            "headers": tool_meta.get("headers", {"Content-Type": "application/json"}),
+            "payload_template": tool_meta.get("payload_template"),
+            "response_mapping": tool_meta.get("response_mapping", "$.result"),
+            "timeout": tool_meta.get("timeout", 120),
+        }
+        tool = await _ensure_custom_tool(session, slug, target_config)
+
     # --- Resolve category ---
 
     category = await _resolve_category(session, meta.get("category"))

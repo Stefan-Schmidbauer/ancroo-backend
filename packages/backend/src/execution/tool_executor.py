@@ -103,9 +103,26 @@ async def execute_tool_workflow(
         # Extract result text
         result_text = extract_response(response_data, tool.response_mapping or "")
 
-        duration_ms = finish_log(execution_log, start_time, status="success",
-                                 output_preview=result_text)
+        # Detect tool-level errors: empty result with an error message in the response
+        tool_error = None
+        if not result_text and isinstance(response_data, dict) and response_data.get("error"):
+            tool_error = response_data["error"]
+
+        status_label = "error" if tool_error else "success"
+        duration_ms = finish_log(execution_log, start_time, status=status_label,
+                                 output_preview=result_text,
+                                 error_message=tool_error)
         await db.flush()
+
+        if tool_error:
+            return {
+                "text": None,
+                "action": "none",
+                "success": False,
+                "error": tool_error,
+                "execution_log_id": str(execution_log.id),
+                "duration_ms": duration_ms,
+            }
 
         action = workflow.output_action or "replace_selection"
         metadata: dict[str, Any] = {"duration_ms": duration_ms}

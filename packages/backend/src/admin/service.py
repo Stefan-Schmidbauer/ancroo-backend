@@ -72,6 +72,7 @@ async def create_workflow(
     recipe: Optional[dict] = None,
     output_action: Optional[str] = None,
     default_hotkey: Optional[str] = None,
+    timeout_seconds: int = 60,
     created_by: Optional[UUID] = None,
     # Execution target (exactly one)
     llm_model_id: Optional[UUID] = None,
@@ -92,6 +93,7 @@ async def create_workflow(
         recipe=recipe,
         output_action=output_action,
         default_hotkey=default_hotkey,
+        timeout_seconds=timeout_seconds,
         is_active=True,
         created_by=created_by,
         llm_model_id=llm_model_id,
@@ -125,6 +127,7 @@ async def update_workflow(
     recipe: Optional[dict] = None,
     output_action: Optional[str] = None,
     default_hotkey: Optional[str] = None,
+    timeout_seconds: Optional[int] = None,
     is_active: Optional[bool] = None,
     prompt_template: Optional[str] = None,
     temperature: Optional[float] = None,
@@ -152,6 +155,8 @@ async def update_workflow(
         workflow.output_action = output_action
     if default_hotkey is not None:
         workflow.default_hotkey = default_hotkey
+    if timeout_seconds is not None:
+        workflow.timeout_seconds = timeout_seconds
     if is_active is not None:
         workflow.is_active = is_active
     if prompt_template is not None:
