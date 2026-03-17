@@ -157,7 +157,7 @@ async def create_workflow_route(
     # Text-Transformation fields
     llm_model_id: str = Form(""),
     prompt_template: str = Form(""),
-    temperature: float = Form(0.3),
+    temperature: float = Form(0.7),
     # Speech-to-Text fields
     stt_model_id: str = Form(""),
     # Tool / Trigger fields
@@ -170,6 +170,7 @@ async def create_workflow_route(
     output_action: str = Form("replace_selection"),
     category_id: str = Form(""),
     default_hotkey: str = Form(""),
+    timeout_seconds: int = Form(60),
 ):
     """Create a new workflow from wizard form data."""
     user = await get_current_user(request, db)
@@ -220,6 +221,7 @@ async def create_workflow_route(
         recipe=recipe,
         output_action=output_action,
         default_hotkey=default_hotkey or None,
+        timeout_seconds=timeout_seconds,
         created_by=user.id,
         llm_model_id=parsed_llm_model_id,
         prompt_template=prompt_template or None,
@@ -390,8 +392,9 @@ async def update_workflow(
     workflow_type: str = Form(""),
     # Text-Transformation fields
     prompt_template: str = Form(""),
-    temperature: float = Form(0.3),
+    temperature: float = Form(0.7),
     default_hotkey: str = Form(""),
+    timeout_seconds: int = Form(60),
     # Model / Tool FK fields
     llm_model_id: str = Form(""),
     stt_model_id: str = Form(""),
@@ -448,6 +451,7 @@ async def update_workflow(
         recipe=recipe,
         output_action=output_action,
         default_hotkey=default_hotkey or None,
+        timeout_seconds=timeout_seconds,
         is_active=is_active == "on",
         prompt_template=prompt_template or None,
         temperature=temperature,
@@ -491,55 +495,6 @@ async def toggle_workflow_active(request: Request, slug: str, db: DbSession):
     })
 
 
-# --- Test Execution (HTMX) ---
-
-@router.post("/workflows/{slug}/test", response_class=HTMLResponse)
-async def test_workflow(
-    request: Request,
-    slug: str,
-    db: DbSession,
-    test_input: str = Form(""),
-):
-    """Test-execute a workflow and return result as HTML partial."""
-    from src.execution.dispatcher import ExecutionError, execute_workflow
-
-    workflow = await service.get_workflow(db, slug)
-    if not workflow:
-        return templates.TemplateResponse("partials/test_result.html", {
-            "request": request,
-            "success": False,
-            "error": "Workflow not found",
-            "output": None,
-            "duration_ms": None,
-        })
-
-    user = await get_current_user(request, db)
-    input_data = {"text": test_input, "context": {}}
-
-    try:
-        result = await execute_workflow(
-            workflow=workflow,
-            input_data=input_data,
-            db=db,
-            user_id=user.id,
-            client_version="admin-gui",
-            client_platform="web",
-        )
-        return templates.TemplateResponse("partials/test_result.html", {
-            "request": request,
-            "success": True,
-            "error": None,
-            "output": result.get("text", ""),
-            "duration_ms": result.get("duration_ms"),
-        })
-    except ExecutionError as e:
-        return templates.TemplateResponse("partials/test_result.html", {
-            "request": request,
-            "success": False,
-            "error": e.message,
-            "output": None,
-            "duration_ms": None,
-        })
 
 
 # ============================================================
@@ -840,6 +795,7 @@ async def discover_runner_tools(request: Request, db: DbSession):
 @router.get("/llm-models", response_class=HTMLResponse)
 async def llm_models_list(request: Request, db: DbSession):
     """LLM model overview page."""
+    from src.integrations.llm_providers import LLM_PROVIDERS_BY_KEY
     result = await db.execute(
         select(LLMModel).options(selectinload(LLMModel.workflows)).order_by(LLMModel.name)
     )
@@ -847,6 +803,7 @@ async def llm_models_list(request: Request, db: DbSession):
     return templates.TemplateResponse("llm_models.html", {
         "request": request,
         "models": llm_models,
+        "providers_by_key": LLM_PROVIDERS_BY_KEY,
         **_flash_context(request),
     })
 
@@ -854,10 +811,12 @@ async def llm_models_list(request: Request, db: DbSession):
 @router.get("/llm-models/new", response_class=HTMLResponse)
 async def new_llm_model_form(request: Request):
     """Show create LLM model form."""
+    from src.integrations.llm_providers import LLM_PROVIDERS
     return templates.TemplateResponse("llm_model_form.html", {
         "request": request,
         "model": None,
         "edit_mode": False,
+        "providers": LLM_PROVIDERS,
     })
 
 
@@ -867,6 +826,7 @@ async def llm_model_probe_models(
     provider_type: str = Query("ollama"),
     base_url: str = Query(""),
     api_key: str = Query(""),
+    endpoint_models: str = Query(""),
 ):
     """HTMX: Probe available models using form field values (before model is saved)."""
     if not base_url:
@@ -876,7 +836,8 @@ async def llm_model_probe_models(
     except HTTPException:
         return HTMLResponse('<option value="">-- invalid URL --</option>')
     try:
-        models = await list_llm_models(base_url, provider_type, api_key or None)
+        models = await list_llm_models(base_url, provider_type, api_key or None,
+                                       endpoint_models or None)
     except LLMError:
         return HTMLResponse('<option value="">-- could not reach provider --</option>')
     if not models:
@@ -894,6 +855,8 @@ async def create_llm_model(
     provider_type: str = Form(...),
     name: str = Form(...),
     base_url: str = Form(...),
+    endpoint_execute: str = Form("/v1/chat/completions"),
+    endpoint_models: str = Form("/v1/models"),
     api_key: str = Form(""),
     model_id: str = Form(...),
     default_temperature: float = Form(0.3),
@@ -913,6 +876,8 @@ async def create_llm_model(
         provider_type=provider_type,
         name=name,
         base_url=base_url,
+        endpoint_execute=endpoint_execute,
+        endpoint_models=endpoint_models,
         api_key=encrypt_api_key(api_key) if api_key else None,
         model_id=model_id,
         default_temperature=default_temperature,
@@ -930,6 +895,7 @@ async def llm_model_detail(request: Request, model_id: UUID, db: DbSession):
     if not llm_model:
         raise HTTPException(status_code=404, detail="LLM model not found")
 
+    from src.integrations.llm_providers import LLM_PROVIDERS_BY_KEY
     result = await db.execute(
         select(Workflow)
         .where(Workflow.llm_model_id == model_id)
@@ -941,6 +907,7 @@ async def llm_model_detail(request: Request, model_id: UUID, db: DbSession):
         "request": request,
         "model": llm_model,
         "linked_workflows": linked_workflows,
+        "providers_by_key": LLM_PROVIDERS_BY_KEY,
         **_flash_context(request),
     })
 
@@ -948,6 +915,7 @@ async def llm_model_detail(request: Request, model_id: UUID, db: DbSession):
 @router.get("/llm-models/{model_id}/edit", response_class=HTMLResponse)
 async def edit_llm_model_form(request: Request, model_id: UUID, db: DbSession):
     """Show edit LLM model form."""
+    from src.integrations.llm_providers import LLM_PROVIDERS
     llm_model = await db.get(LLMModel, model_id)
     if not llm_model:
         raise HTTPException(status_code=404, detail="LLM model not found")
@@ -955,6 +923,7 @@ async def edit_llm_model_form(request: Request, model_id: UUID, db: DbSession):
         "request": request,
         "model": llm_model,
         "edit_mode": True,
+        "providers": LLM_PROVIDERS,
     })
 
 
@@ -965,6 +934,8 @@ async def update_llm_model(
     db: DbSession,
     name: str = Form(...),
     base_url: str = Form(...),
+    endpoint_execute: str = Form("/v1/chat/completions"),
+    endpoint_models: str = Form("/v1/models"),
     api_key: str = Form(""),
     model_id_field: str = Form(..., alias="model_id_field"),
     default_temperature: float = Form(0.3),
@@ -979,6 +950,8 @@ async def update_llm_model(
 
     llm_model.name = name
     llm_model.base_url = base_url
+    llm_model.endpoint_execute = endpoint_execute
+    llm_model.endpoint_models = endpoint_models
     if api_key:
         llm_model.api_key = encrypt_api_key(api_key)
     llm_model.model_id = model_id_field
@@ -1036,7 +1009,8 @@ async def llm_model_discover_models(request: Request, model_id: UUID, db: DbSess
         return HTMLResponse('<p class="text-xs text-red-600">LLM model not found</p>')
     try:
         models = await list_llm_models(llm_model.base_url, llm_model.provider_type,
-                                       decrypt_api_key(llm_model.api_key) if llm_model.api_key else None)
+                                       decrypt_api_key(llm_model.api_key) if llm_model.api_key else None,
+                                       llm_model.endpoint_models)
     except LLMError as e:
         return HTMLResponse(
             f'<p class="text-xs text-red-600">Failed to load models: {e}</p>'

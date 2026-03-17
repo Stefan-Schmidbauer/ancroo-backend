@@ -8,38 +8,83 @@
     </h1>
 
     <form method="post" action="{{ '/admin/llm-models/' + (model.id | string) + '/update' if edit_mode else '/admin/llm-models' }}">
-        <div class="bg-white rounded-lg border p-4 mb-4">
-            <h2 class="text-sm font-semibold text-gray-700 mb-3">Model</h2>
 
-            <div class="mb-3">
-                <label class="block text-sm text-gray-600 mb-1">Type</label>
-                <select name="provider_type" {{ 'disabled' if edit_mode }}
-                    class="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
-                    {% set ct = model.provider_type if model else 'ollama' %}
-                    <option value="ollama" {{ 'selected' if ct == 'ollama' }}>Ollama</option>
-                    <option value="openai_compatible" {{ 'selected' if ct == 'openai_compatible' }}>OpenAI-compatible (LM Studio, vLLM, OpenAI, ...)</option>
-                </select>
-                {% if edit_mode %}
-                <input type="hidden" name="provider_type" value="{{ model.provider_type }}">
-                {% endif %}
-            </div>
+        <!-- Identity -->
+        <div class="bg-white rounded-lg border p-4 mb-4">
+            <h2 class="text-sm font-semibold text-gray-700 mb-3">Identity</h2>
 
             <div class="mb-3">
                 <label class="block text-sm text-gray-600 mb-1">Name</label>
                 <input type="text" name="name" required
                     value="{{ model.name if model else '' }}"
                     class="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    placeholder="e.g. Ollama (local)">
+                    placeholder="e.g. Anthropic — Claude Sonnet">
             </div>
+
+            <div>
+                <label class="block text-sm text-gray-600 mb-1">Provider</label>
+                <select name="provider_type" id="provider-type" {{ 'disabled' if edit_mode }}
+                    class="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    {% set ct = model.provider_type if model else 'ollama' %}
+                    {% for p in providers %}
+                    <option value="{{ p.key }}" {{ 'selected' if ct == p.key }}
+                        data-default-url="{{ p.default_base_url }}"
+                        data-default-endpoint-execute="{{ p.default_endpoint_execute }}"
+                        data-default-endpoint-models="{{ p.default_endpoint_models }}"
+                        data-requires-key="{{ 'true' if p.requires_api_key else 'false' }}">
+                        {{ p.label }}
+                    </option>
+                    {% endfor %}
+                </select>
+                {% if edit_mode %}
+                <input type="hidden" name="provider_type" value="{{ model.provider_type }}">
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- Connection -->
+        <div class="bg-white rounded-lg border p-4 mb-4">
+            <h2 class="text-sm font-semibold text-gray-700 mb-3">Connection</h2>
 
             <div class="mb-3">
                 <label class="block text-sm text-gray-600 mb-1">Base URL</label>
-                <input type="url" name="base_url" required
+                <input type="url" name="base_url" id="base-url" required
                     value="{{ model.base_url if model else 'http://ollama:11434' }}"
                     class="w-full border rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500"
                     placeholder="http://ollama:11434">
-                <p class="text-xs text-gray-400 mt-1">For OpenAI-compatible: base URL without <code>/v1</code>, e.g. <code>http://localhost:1234</code></p>
+                <p class="text-xs text-gray-400 mt-1">Base URL without trailing path, e.g. <code>https://api.openai.com</code></p>
             </div>
+
+            <div class="grid grid-cols-2 gap-3 mb-3">
+                <div>
+                    <label class="block text-sm text-gray-600 mb-1">Endpoint Execute</label>
+                    <input type="text" name="endpoint_execute" id="endpoint-execute"
+                        value="{{ model.endpoint_execute if model else '/api/generate' }}"
+                        class="w-full border rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        placeholder="/v1/chat/completions">
+                </div>
+                <div>
+                    <label class="block text-sm text-gray-600 mb-1">Endpoint Models</label>
+                    <input type="text" name="endpoint_models" id="endpoint-models"
+                        value="{{ model.endpoint_models if model else '/api/tags' }}"
+                        class="w-full border rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        placeholder="/v1/models">
+                </div>
+            </div>
+            <p class="text-xs text-gray-400 mb-3">API paths appended to the base URL. Pre-filled with provider defaults — override if your server uses different paths.</p>
+
+            <div>
+                <label class="block text-sm text-gray-600 mb-1">API Key <span class="text-gray-400" id="api-key-hint">(optional)</span></label>
+                <input type="password" name="api_key"
+                    value="{{ model.api_key if model and model.api_key else '' }}"
+                    class="w-full border rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    placeholder="Leave empty for local providers">
+            </div>
+        </div>
+
+        <!-- Model -->
+        <div class="bg-white rounded-lg border p-4 mb-4">
+            <h2 class="text-sm font-semibold text-gray-700 mb-3">Model</h2>
 
             <div class="mb-3">
                 <label class="block text-sm text-gray-600 mb-1">Model ID</label>
@@ -52,7 +97,7 @@
                         hx-get="/admin/llm-models/probe-models"
                         hx-target="#probe-model-list"
                         hx-swap="innerHTML"
-                        hx-include="[name='provider_type'],[name='base_url'],[name='api_key']"
+                        hx-include="[name='provider_type'],[name='base_url'],[name='api_key'],[name='endpoint_models']"
                         hx-on::after-request="document.getElementById('probe-model-list').classList.remove('hidden')"
                         class="text-xs bg-blue-50 text-blue-600 px-3 py-2 rounded-lg hover:bg-blue-100 transition whitespace-nowrap">
                         Load Models <span class="htmx-indicator">...</span>
@@ -61,36 +106,40 @@
                 <select id="probe-model-list" class="mt-1 w-full border rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500 hidden"
                     onchange="if(this.value) document.querySelector('[name=model_id]').value = this.value">
                 </select>
-                <p class="text-xs text-gray-400 mt-1">The model identifier, e.g. <code>mistral:7b</code> or <code>gpt-4o</code>. Click "Load Models" to discover available models.</p>
+                <p class="text-xs text-gray-400 mt-1">The model identifier, e.g. <code>mistral:7b</code>, <code>claude-sonnet-4-20250514</code>, or <code>gpt-4o</code>. Click "Load Models" to discover available models.</p>
             </div>
 
-            <div class="mb-3">
-                <label class="block text-sm text-gray-600 mb-1">Default Temperature</label>
-                <input type="number" name="default_temperature" step="0.1" min="0" max="2"
-                    value="{{ model.default_temperature if model and model.default_temperature is not none else '0.3' }}"
-                    class="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    placeholder="0.3">
-                <p class="text-xs text-gray-400 mt-1">Default temperature for this model. Can be overridden per workflow.</p>
-            </div>
-
-            <div class="mb-3">
-                <label class="block text-sm text-gray-600 mb-1">API Key <span class="text-gray-400">(optional)</span></label>
-                <input type="password" name="api_key"
-                    value="{{ model.api_key if model and model.api_key else '' }}"
-                    class="w-full border rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    placeholder="Required for OpenAI; leave empty for local Ollama">
-            </div>
-
-            {% if edit_mode %}
-            <div class="mt-3">
-                <label class="flex items-center gap-2 text-sm text-gray-600">
-                    <input type="checkbox" name="is_active" {{ 'checked' if model.is_active }}
-                        class="rounded border-gray-300">
-                    Active
+            <div>
+                {% set _temp = model.default_temperature if model and model.default_temperature is not none else 0.7 %}
+                <label class="block text-sm text-gray-600 mb-1">
+                    Default Temperature: <span id="temp-display">{{ _temp }}</span>
                 </label>
+                <input type="range" name="default_temperature" min="0" max="2" step="0.1"
+                    value="{{ _temp }}"
+                    oninput="document.getElementById('temp-display').textContent = this.value"
+                    class="w-full">
+                <div class="flex justify-between text-xs text-gray-400 mt-1">
+                    <span>0.0 — Deterministic</span>
+                    <span>0.7 — Standard</span>
+                    <span>2.0 — Max creative</span>
+                </div>
+                <p class="text-xs text-gray-400 mt-1">
+                    Fallback temperature when a workflow does not set its own. Can be overridden per workflow.
+                </p>
             </div>
-            {% endif %}
         </div>
+
+        <!-- Settings (edit only) -->
+        {% if edit_mode %}
+        <div class="bg-white rounded-lg border p-4 mb-4">
+            <h2 class="text-sm font-semibold text-gray-700 mb-3">Settings</h2>
+            <label class="flex items-center gap-2 text-sm text-gray-600">
+                <input type="checkbox" name="is_active" {{ 'checked' if model.is_active }}
+                    class="rounded border-gray-300">
+                Active
+            </label>
+        </div>
+        {% endif %}
 
         <div class="flex items-center gap-3">
             <button type="submit" class="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 transition text-sm">
@@ -103,4 +152,35 @@
         </div>
     </form>
 </div>
+
+{% if not edit_mode %}
+<script>
+(function() {
+    var sel = document.getElementById('provider-type');
+    var urlInput = document.getElementById('base-url');
+    var endpointExec = document.getElementById('endpoint-execute');
+    var endpointModels = document.getElementById('endpoint-models');
+    var keyHint = document.getElementById('api-key-hint');
+
+    sel.addEventListener('change', function() {
+        var opt = sel.options[sel.selectedIndex];
+        var defaultUrl = opt.getAttribute('data-default-url');
+        var requiresKey = opt.getAttribute('data-requires-key') === 'true';
+
+        if (defaultUrl) {
+            urlInput.value = defaultUrl;
+            urlInput.placeholder = defaultUrl;
+        } else {
+            urlInput.value = '';
+            urlInput.placeholder = 'https://your-server.example.com';
+        }
+
+        endpointExec.value = opt.getAttribute('data-default-endpoint-execute');
+        endpointModels.value = opt.getAttribute('data-default-endpoint-models');
+
+        keyHint.textContent = requiresKey ? '(required)' : '(optional)';
+    });
+})();
+</script>
+{% endif %}
 {% endblock %}

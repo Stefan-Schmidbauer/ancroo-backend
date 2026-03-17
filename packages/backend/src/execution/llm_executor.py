@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from src.db.models import ExecutionLog, LLMModel, Workflow
 from src.execution.log_helper import finish_log
 from src.execution.template import render_prompt
+from src.integrations.llm_providers import get_api_format
 
 logger = logging.getLogger(__name__)
 
@@ -19,6 +20,51 @@ class LLMExecutionError(Exception):
     def __init__(self, message: str):
         self.message = message
         super().__init__(message)
+
+
+def _build_request(llm_model: LLMModel, prompt: str, temperature: float) -> tuple[str, dict, dict, str]:
+    """Build URL, payload, headers, and response_path for an LLM request."""
+    base_url = llm_model.base_url.rstrip("/")
+    endpoint = llm_model.endpoint_execute.rstrip("/")
+    url = f"{base_url}{endpoint}"
+    api_format = get_api_format(llm_model.provider_type)
+
+    headers: dict[str, str] = {"Content-Type": "application/json"}
+
+    if api_format == "ollama":
+        payload = {
+            "model": llm_model.model_id,
+            "prompt": prompt,
+            "stream": False,
+            "options": {"temperature": temperature},
+        }
+        response_path = "response"
+
+    elif api_format == "anthropic":
+        payload = {
+            "model": llm_model.model_id,
+            "max_tokens": 4096,
+            "messages": [{"role": "user", "content": prompt}],
+            "temperature": temperature,
+        }
+        response_path = "content[0].text"
+        if llm_model.api_key:
+            headers["x-api-key"] = llm_model.api_key
+            headers["anthropic-version"] = "2023-06-01"
+
+    else:
+        # OpenAI-compatible (openai, openrouter, deepseek, mistral, google, groq, custom_openai)
+        payload = {
+            "model": llm_model.model_id,
+            "messages": [{"role": "user", "content": prompt}],
+            "temperature": temperature,
+            "stream": False,
+        }
+        response_path = "choices[0].message.content"
+        if llm_model.api_key:
+            headers["Authorization"] = f"Bearer {llm_model.api_key}"
+
+    return url, payload, headers, response_path
 
 
 async def execute_llm_workflow(
@@ -60,30 +106,7 @@ async def execute_llm_workflow(
     timeout = float(workflow.timeout_seconds)
 
     try:
-        # Build request based on provider type
-        if llm_model.provider_type == "ollama":
-            url = f"{llm_model.base_url.rstrip('/')}/api/generate"
-            payload = {
-                "model": llm_model.model_id,
-                "prompt": prompt,
-                "stream": False,
-                "options": {"temperature": temperature},
-            }
-            response_path = "response"
-        else:
-            # openai_compatible
-            url = f"{llm_model.base_url.rstrip('/')}/v1/chat/completions"
-            payload = {
-                "model": llm_model.model_id,
-                "messages": [{"role": "user", "content": prompt}],
-                "temperature": temperature,
-                "stream": False,
-            }
-            response_path = "choices[0].message.content"
-
-        headers = {"Content-Type": "application/json"}
-        if llm_model.api_key:
-            headers["Authorization"] = f"Bearer {llm_model.api_key}"
+        url, payload, headers, response_path = _build_request(llm_model, prompt, temperature)
 
         async with httpx.AsyncClient(timeout=timeout) as client:
             response = await client.post(url, json=payload, headers=headers)

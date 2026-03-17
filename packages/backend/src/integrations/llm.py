@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING, Any
 import httpx
 
 from src.crypto import decrypt_api_key
+from src.integrations.llm_providers import get_api_format
 
 if TYPE_CHECKING:
     from src.db.models import LLMModel
@@ -21,17 +22,28 @@ class LLMError(Exception):
         super().__init__(message)
 
 
+def _build_headers(api_format: str, api_key: str | None) -> dict[str, str]:
+    """Build auth headers based on the API format."""
+    if not api_key:
+        return {}
+    if api_format == "anthropic":
+        return {
+            "x-api-key": api_key,
+            "anthropic-version": "2023-06-01",
+        }
+    # openai format (Bearer token)
+    return {"Authorization": f"Bearer {api_key}"}
+
+
 async def check_health(model: "LLMModel") -> dict[str, Any]:
     """Run a health check against the LLM model's server."""
     base_url = model.base_url.rstrip("/")
+    endpoint = model.endpoint_models.rstrip("/")
+    url = f"{base_url}{endpoint}"
     api_key = decrypt_api_key(model.api_key)
+    api_format = get_api_format(model.provider_type)
 
-    if model.provider_type == "ollama":
-        url = f"{base_url}/api/tags"
-        headers = {}
-    else:
-        url = f"{base_url}/v1/models"
-        headers = {"Authorization": f"Bearer {api_key}"} if api_key else {}
+    headers = _build_headers(api_format, api_key)
 
     try:
         async with httpx.AsyncClient(timeout=10.0) as client:
@@ -42,17 +54,24 @@ async def check_health(model: "LLMModel") -> dict[str, Any]:
         return {"healthy": False, "error": str(e)}
 
 
-async def list_models(base_url: str, provider_type: str, api_key: str | None = None) -> list[str]:
+async def list_models(base_url: str, provider_type: str,
+                      api_key: str | None = None,
+                      endpoint_models: str | None = None) -> list[str]:
     """List available models from a server (for admin discovery UI)."""
     base_url = base_url.rstrip("/")
-    decrypted_key = decrypt_api_key(api_key)
+    api_format = get_api_format(provider_type)
 
-    if provider_type == "ollama":
-        url = f"{base_url}/api/tags"
-        headers = {}
+    if endpoint_models:
+        endpoint = endpoint_models.rstrip("/")
     else:
-        url = f"{base_url}/v1/models"
-        headers = {"Authorization": f"Bearer {decrypted_key}"} if decrypted_key else {}
+        # Fallback for probe-models (new model form, no DB row yet)
+        from src.integrations.llm_providers import LLM_PROVIDERS_BY_KEY
+        provider = LLM_PROVIDERS_BY_KEY.get(provider_type)
+        endpoint = provider.default_endpoint_models if provider else "/v1/models"
+
+    url = f"{base_url}{endpoint}"
+    decrypted_key = decrypt_api_key(api_key)
+    headers = _build_headers(api_format, decrypted_key)
 
     try:
         async with httpx.AsyncClient(timeout=10.0) as client:
@@ -60,9 +79,10 @@ async def list_models(base_url: str, provider_type: str, api_key: str | None = N
             response.raise_for_status()
             data = response.json()
 
-        if provider_type == "ollama":
+        if api_format == "ollama":
             return [m["name"] for m in data.get("models", [])]
         else:
+            # Both Anthropic and OpenAI use {"data": [{"id": "..."}]}
             return [m["id"] for m in data.get("data", [])]
     except httpx.HTTPError as e:
         raise LLMError(f"Failed to list models: {e}")

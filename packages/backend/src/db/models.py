@@ -77,11 +77,19 @@ class LLMModel(Base):
     )
     provider_type: Mapped[str] = mapped_column(
         String(50), nullable=False,
-        comment="'ollama', 'openai_compatible'"
+        comment="Provider key from llm_providers registry, e.g. 'ollama', 'anthropic', 'openai', 'openrouter', 'custom_openai'"
     )
     base_url: Mapped[str] = mapped_column(
         String(500), nullable=False,
         comment="e.g. 'http://ollama-rocm:11434'"
+    )
+    endpoint_execute: Mapped[str] = mapped_column(
+        String(255), nullable=False, default="/v1/chat/completions",
+        comment="API path for execution, e.g. '/v1/chat/completions', '/v1/messages', '/api/generate'"
+    )
+    endpoint_models: Mapped[str] = mapped_column(
+        String(255), nullable=False, default="/v1/models",
+        comment="API path for model discovery/health, e.g. '/v1/models', '/api/tags'"
     )
     api_key: Mapped[Optional[str]] = mapped_column(
         String(500),
@@ -400,7 +408,7 @@ class Workflow(Base):
 
     __table_args__ = (
         CheckConstraint(
-            "num_nonnulls(llm_model_id, stt_model_id, tool_id) <= 1",
+            "num_nonnulls(llm_model_id, stt_model_id, tool_id) = 1",
             name="check_single_execution_target",
         ),
         Index("idx_workflows_slug", "slug"),
