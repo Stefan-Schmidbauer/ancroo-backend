@@ -1,7 +1,6 @@
 """Admin GUI routes — Jinja2 + HTMX."""
 
 import json
-import re
 from pathlib import Path
 from typing import Annotated
 from uuid import UUID
@@ -16,22 +15,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from src.config import get_settings
 from src.version import get_version_info
 from src.db.session import get_db
-from src.db.models import LLMProvider as LLMProviderModel, STTProvider as STTProviderModel, ToolProvider as ToolProviderModel, Workflow
+from src.db.models import Category, LLMModel, STTModel, Tool, Workflow
 from src.admin import importer, service
-from src.execution.presets import build_llm_target, build_n8n_target, build_stt_target, build_recipe
-from src.execution.http_executor import execute_http_workflow, HttpExecutionError
-from src.integrations import ollama, registry, sync
-from src.integrations.ollama import OllamaError
-from src.integrations.tool_provider import ToolProviderError
-from src.integrations.llm_provider import check_provider_health, list_provider_models, LLMProviderError
-from src.integrations.stt_provider import (
-    check_provider_health as check_stt_health,
-    list_provider_models as list_stt_models,
-    STTProviderError,
-)
-from src.workflows.pipeline_executor import execute_pipeline, PipelineExecutionError
+from src.integrations.llm import check_health as check_llm_health, list_models as list_llm_models, LLMError
+from src.integrations.stt import check_health as check_stt_health, list_models as list_stt_models, STTError
+from src.integrations.runner import sync_tools_from_runner, RunnerDiscoveryError
 from src.api.v1.dependencies import get_current_user
-from src.crypto import encrypt_api_key
+from src.crypto import encrypt_api_key, decrypt_api_key
 from src.security import validate_provider_url
 
 DbSession = Annotated[AsyncSession, Depends(get_db)]
@@ -65,6 +55,24 @@ def _flash_context(request: Request) -> dict:
     if msg:
         return {"flash_message": msg, "flash_type": msg_type}
     return {}
+
+
+def _build_recipe(sources: list[str], form_fields: list | None = None,
+                  output_fields: list | None = None,
+                  file_config: dict | None = None) -> dict:
+    """Build a recipe dict matching the canonical schema.
+
+    Schema: {collect: [...sources], form_fields?: [...], output_fields?: [...], file_config?: {...}}
+    `collect` is always a flat array of source strings — same format as importer.py.
+    """
+    recipe: dict = {"collect": sources or []}
+    if form_fields:
+        recipe["form_fields"] = form_fields
+    if output_fields:
+        recipe["output_fields"] = output_fields
+    if file_config:
+        recipe["file_config"] = file_config
+    return recipe
 
 
 # --- Dashboard ---
@@ -103,67 +111,40 @@ async def new_workflow_form(request: Request):
 @router.get("/workflows/new/form", response_class=HTMLResponse)
 async def workflow_type_form(request: Request, db: DbSession, type: str = "text_transformation"):
     """HTMX partial: Return type-specific form fields."""
-    providers = []
-    llm_providers = []
-    stt_providers = []
+    llm_models = []
+    stt_models = []
+    tools = []
+    categories = await service.list_categories(db)
 
     if type == "text_transformation":
         result = await db.execute(
-            select(LLMProviderModel).where(LLMProviderModel.is_active == True).order_by(LLMProviderModel.name)
+            select(LLMModel).where(LLMModel.is_active == True).order_by(LLMModel.name)
         )
-        llm_providers = list(result.scalars().all())
+        llm_models = list(result.scalars().all())
         template = "partials/workflow_type_text.html"
-    elif type == "workflow_trigger":
-        providers = await registry.list_providers(db)
-        template = "partials/workflow_type_trigger.html"
     elif type == "speech_to_text":
         result = await db.execute(
-            select(STTProviderModel).where(STTProviderModel.is_active == True).order_by(STTProviderModel.name)
+            select(STTModel).where(STTModel.is_active == True).order_by(STTModel.name)
         )
-        stt_providers = list(result.scalars().all())
+        stt_models = list(result.scalars().all())
         template = "partials/workflow_type_whisper.html"
     else:
-        template = "partials/workflow_type_custom.html"
+        # tool, workflow_trigger, custom — all use tool dropdown
+        result = await db.execute(
+            select(Tool).where(Tool.is_active == True).order_by(Tool.name)
+        )
+        tools = list(result.scalars().all())
+        template = "partials/workflow_type_tool.html"
 
     return templates.TemplateResponse(template, {
         "request": request,
-        "providers": providers,
-        "llm_providers": llm_providers,
-        "stt_providers": stt_providers,
+        "llm_models": llm_models,
+        "stt_models": stt_models,
+        "tools": tools,
+        "categories": categories,
         "edit_mode": False,
         "workflow": None,
     })
-
-
-@router.get("/workflows/new/llm-models", response_class=HTMLResponse)
-async def workflow_llm_models(
-    request: Request,
-    db: DbSession,
-    llm_provider_id: UUID | None = Query(None),
-    selected: str = Query(""),
-):
-    """HTMX: Return <option> elements for available LLM models of the selected provider."""
-    fallback = '<option value="">-- uses provider default --</option>'
-    if not llm_provider_id:
-        return HTMLResponse(fallback)
-    provider = await db.get(LLMProviderModel, llm_provider_id)
-    if not provider:
-        return HTMLResponse(fallback)
-
-    if provider.default_model:
-        empty = f'<option value="">-- uses provider default ({provider.default_model}) --</option>'
-    else:
-        empty = '<option value="">-- no provider default; select a model --</option>'
-
-    try:
-        models = await list_provider_models(provider)
-    except LLMProviderError:
-        return HTMLResponse('<option value="">-- could not load models --</option>')
-    options = empty
-    for model in models:
-        sel = ' selected' if model == selected else ''
-        options += f'<option value="{model}"{sel}>{model}</option>'
-    return HTMLResponse(options)
 
 
 @router.post("/workflows")
@@ -173,33 +154,22 @@ async def create_workflow_route(
     name: str = Form(...),
     description: str = Form(""),
     workflow_type: str = Form("text_transformation"),
-    # Text-Transformation fields (provider-based)
-    llm_provider_id: str = Form(""),
-    llm_model: str = Form(""),
+    # Text-Transformation fields
+    llm_model_id: str = Form(""),
     prompt_template: str = Form(""),
     temperature: float = Form(0.3),
-    # Workflow-Trigger fields
-    trigger_system: str = Form(""),
-    trigger_flow_url: str = Form(""),
+    # Speech-to-Text fields
+    stt_model_id: str = Form(""),
+    # Tool / Trigger fields
+    tool_id: str = Form(""),
+    # Collect config
     input_sources: str = Form("text_selection"),
     form_fields_json: str = Form("[]"),
     output_fields_json: str = Form("[]"),
-    # Custom fields
-    target_url: str = Form(""),
-    target_method: str = Form("POST"),
-    target_headers: str = Form(""),
-    payload_template: str = Form(""),
-    response_mapping: str = Form(""),
-    # Speech-to-Text fields (provider-based)
-    stt_provider_id: str = Form(""),
-    stt_model: str = Form(""),
-    stt_language: str = Form(""),
     # Common
     output_action: str = Form("replace_selection"),
-    category: str = Form("text"),
+    category_id: str = Form(""),
     default_hotkey: str = Form(""),
-    # Legacy fallback
-    steps_json: str = Form("[]"),
 ):
     """Create a new workflow from wizard form data."""
     user = await get_current_user(request, db)
@@ -213,57 +183,19 @@ async def create_workflow_route(
     except json.JSONDecodeError:
         form_fields = []
 
-    # Provider IDs (parsed from form strings)
-    parsed_llm_provider_id = UUID(llm_provider_id) if llm_provider_id else None
-    parsed_stt_provider_id = UUID(stt_provider_id) if stt_provider_id else None
-
-    # Parse output fields (shared by all types that support fill_fields)
+    # Parse output fields
     try:
         output_fields = json.loads(output_fields_json)
     except json.JSONDecodeError:
         output_fields = []
 
-    if workflow_type == "text_transformation":
-        recipe = build_recipe(sources, form_fields if form_fields else None,
-                              output_fields if output_fields else None)
-        target_config = build_llm_target(
-            prompt_template=prompt_template,
-            temperature=temperature,
-        )
-        output_action_val = output_action
+    # Parse foreign key IDs
+    parsed_llm_model_id = UUID(llm_model_id) if llm_model_id else None
+    parsed_stt_model_id = UUID(stt_model_id) if stt_model_id else None
+    parsed_tool_id = UUID(tool_id) if tool_id else None
 
-    elif workflow_type == "workflow_trigger":
-        recipe = build_recipe(sources, form_fields if form_fields else None,
-                              output_fields if output_fields else None)
-        target_config = build_n8n_target(trigger_flow_url)
-        output_action_val = output_action
-
-    elif workflow_type == "custom":
-        recipe = build_recipe(sources, form_fields if form_fields else None,
-                              output_fields if output_fields else None)
-        # Parse headers
-        headers = {"Content-Type": "application/json"}
-        if target_headers.strip():
-            try:
-                headers = json.loads(target_headers)
-            except json.JSONDecodeError:
-                for line in target_headers.strip().split("\n"):
-                    if ":" in line:
-                        k, v = line.split(":", 1)
-                        headers[k.strip()] = v.strip()
-
-        target_config = {
-            "url": target_url,
-            "method": target_method,
-            "headers": headers,
-            "payload_template": payload_template,
-            "response_mapping": response_mapping,
-            "timeout": 120,
-        }
-        output_action_val = output_action
-
-    elif workflow_type == "speech_to_text":
-        recipe = build_recipe(
+    if workflow_type == "speech_to_text":
+        recipe = _build_recipe(
             ["audio"],
             file_config={
                 "accept": "audio/*",
@@ -272,63 +204,31 @@ async def create_workflow_route(
                 "required": True,
             },
         )
-        target_config = build_stt_target(
-            language=stt_language or None,
-        )
-        output_action_val = output_action
-
     else:
-        # Legacy pipeline mode
-        try:
-            steps = json.loads(steps_json)
-        except json.JSONDecodeError:
-            steps = []
-        workflow = await service.create_workflow(
-            db=db, name=name, description=description,
-            category=category, output_type=output_action,
-            pipeline_steps=steps, created_by=user.id,
-        )
-        await db.commit()
-        return RedirectResponse(f"/admin/workflows/{workflow.slug}?flash=created", status_code=303)
+        # text_transformation, tool, workflow_trigger, custom
+        recipe = _build_recipe(sources, form_fields if form_fields else None,
+                               output_fields if output_fields else None)
+
+    parsed_category_id = UUID(category_id) if category_id else None
 
     workflow = await service.create_workflow(
         db=db,
         name=name,
         description=description,
-        category=category,
-        output_type=output_action_val,
-        created_by=user.id,
+        category_id=parsed_category_id,
         workflow_type=workflow_type,
         recipe=recipe,
-        target_config=target_config,
-        output_action=output_action_val,
+        output_action=output_action,
         default_hotkey=default_hotkey or None,
-        llm_provider_id=parsed_llm_provider_id,
-        llm_model=llm_model.strip() or None,
-        stt_provider_id=parsed_stt_provider_id,
-        stt_model=stt_model.strip() or None,
+        created_by=user.id,
+        llm_model_id=parsed_llm_model_id,
+        prompt_template=prompt_template or None,
+        temperature=temperature,
+        stt_model_id=parsed_stt_model_id,
+        tool_id=parsed_tool_id,
     )
     await db.commit()
     return RedirectResponse(f"/admin/workflows/{workflow.slug}?flash=created", status_code=303)
-
-
-# --- Legacy Create (pipeline) ---
-
-@router.get("/workflows/new/legacy", response_class=HTMLResponse)
-async def new_legacy_workflow_form(request: Request):
-    """Show legacy pipeline workflow form."""
-    models = []
-    try:
-        model_list = await ollama.list_models()
-        models = [m.get("name", m.get("model", "")) for m in model_list]
-    except OllamaError:
-        pass
-    return templates.TemplateResponse("workflow_form.html", {
-        "request": request,
-        "workflow": None,
-        "models": models,
-        "edit_mode": False,
-    })
 
 
 # --- Import Workflow ---
@@ -444,45 +344,35 @@ async def edit_workflow_form(request: Request, slug: str, db: DbSession):
     if not workflow:
         raise HTTPException(status_code=404, detail="Workflow not found")
 
-    # Use type-aware edit template for generic workflows
-    if workflow.workflow_type:
-        providers = []
-        llm_providers = []
-        stt_providers = []
+    llm_models = []
+    stt_models = []
+    tools = []
+    categories = await service.list_categories(db)
 
-        if workflow.workflow_type == "workflow_trigger":
-            providers = await registry.list_providers(db)
-        elif workflow.workflow_type == "text_transformation":
-            result = await db.execute(
-                select(LLMProviderModel).where(LLMProviderModel.is_active == True).order_by(LLMProviderModel.name)
-            )
-            llm_providers = list(result.scalars().all())
-        elif workflow.workflow_type == "speech_to_text":
-            result = await db.execute(
-                select(STTProviderModel).where(STTProviderModel.is_active == True).order_by(STTProviderModel.name)
-            )
-            stt_providers = list(result.scalars().all())
+    if workflow.workflow_type == "text_transformation":
+        result = await db.execute(
+            select(LLMModel).where(LLMModel.is_active == True).order_by(LLMModel.name)
+        )
+        llm_models = list(result.scalars().all())
+    elif workflow.workflow_type == "speech_to_text":
+        result = await db.execute(
+            select(STTModel).where(STTModel.is_active == True).order_by(STTModel.name)
+        )
+        stt_models = list(result.scalars().all())
+    else:
+        # tool, workflow_trigger, custom — all use tool dropdown
+        result = await db.execute(
+            select(Tool).where(Tool.is_active == True).order_by(Tool.name)
+        )
+        tools = list(result.scalars().all())
 
-        return templates.TemplateResponse("workflow_edit.html", {
-            "request": request,
-            "workflow": workflow,
-            "providers": providers,
-            "llm_providers": llm_providers,
-            "stt_providers": stt_providers,
-            "edit_mode": True,
-        })
-
-    # Legacy pipeline workflow: use old form
-    models = []
-    try:
-        model_list = await ollama.list_models()
-        models = [m.get("name", m.get("model", "")) for m in model_list]
-    except OllamaError:
-        pass
-    return templates.TemplateResponse("workflow_form.html", {
+    return templates.TemplateResponse("workflow_edit.html", {
         "request": request,
         "workflow": workflow,
-        "models": models,
+        "llm_models": llm_models,
+        "stt_models": stt_models,
+        "tools": tools,
+        "categories": categories,
         "edit_mode": True,
     })
 
@@ -494,47 +384,33 @@ async def update_workflow(
     db: DbSession,
     name: str = Form(...),
     description: str = Form(""),
-    category: str = Form("text"),
+    category_id: str = Form(""),
     is_active: str = Form("off"),
-    # New generic fields
+    # Workflow type
     workflow_type: str = Form(""),
+    # Text-Transformation fields
     prompt_template: str = Form(""),
     temperature: float = Form(0.3),
     default_hotkey: str = Form(""),
-    # Provider fields
-    llm_provider_id: str = Form(""),
-    llm_model: str = Form(""),
-    stt_provider_id: str = Form(""),
-    stt_model: str = Form(""),
-    stt_language: str = Form(""),
-    # Trigger fields
-    trigger_system: str = Form(""),
-    trigger_flow_url: str = Form(""),
+    # Model / Tool FK fields
+    llm_model_id: str = Form(""),
+    stt_model_id: str = Form(""),
+    tool_id: str = Form(""),
+    # Collect config
     input_sources: str = Form("text_selection"),
     form_fields_json: str = Form("[]"),
     output_fields_json: str = Form("[]"),
-    # Custom fields
-    target_url: str = Form(""),
-    target_method: str = Form("POST"),
-    target_headers: str = Form(""),
-    payload_template: str = Form(""),
-    response_mapping: str = Form(""),
     output_action: str = Form("replace_selection"),
-    # Legacy fallback
-    output_type: str = Form("replace_selection"),
-    steps_json: str = Form("[]"),
 ):
     """Update workflow from form data."""
-    target_config = None
     recipe = None
-    output_action_val = None
-    pipeline_steps = None
 
-    # Provider IDs (parsed from form strings)
-    parsed_llm_provider_id = UUID(llm_provider_id) if llm_provider_id else None
-    parsed_stt_provider_id = UUID(stt_provider_id) if stt_provider_id else None
+    # Parse foreign key IDs
+    parsed_llm_model_id = UUID(llm_model_id) if llm_model_id else None
+    parsed_stt_model_id = UUID(stt_model_id) if stt_model_id else None
+    parsed_tool_id = UUID(tool_id) if tool_id else None
 
-    # Parse sources, form fields, and output fields (shared by all types)
+    # Parse sources, form fields, and output fields
     sources = [s.strip() for s in input_sources.split(",") if s.strip()]
     try:
         form_fields = json.loads(form_fields_json)
@@ -545,45 +421,8 @@ async def update_workflow(
     except json.JSONDecodeError:
         output_fields = []
 
-    if workflow_type == "text_transformation":
-        recipe = build_recipe(sources, form_fields if form_fields else None,
-                              output_fields if output_fields else None)
-        target_config = build_llm_target(
-            prompt_template=prompt_template,
-            temperature=temperature,
-        )
-        output_action_val = output_action
-
-    elif workflow_type == "workflow_trigger":
-        recipe = build_recipe(sources, form_fields if form_fields else None,
-                              output_fields if output_fields else None)
-        target_config = build_n8n_target(trigger_flow_url)
-        output_action_val = output_action
-
-    elif workflow_type == "custom":
-        recipe = build_recipe(sources, form_fields if form_fields else None,
-                              output_fields if output_fields else None)
-        headers = {"Content-Type": "application/json"}
-        if target_headers.strip():
-            try:
-                headers = json.loads(target_headers)
-            except json.JSONDecodeError:
-                for line in target_headers.strip().split("\n"):
-                    if ":" in line:
-                        k, v = line.split(":", 1)
-                        headers[k.strip()] = v.strip()
-        target_config = {
-            "url": target_url,
-            "method": target_method,
-            "headers": headers,
-            "payload_template": payload_template,
-            "response_mapping": response_mapping,
-            "timeout": 120,
-        }
-        output_action_val = output_action
-
-    elif workflow_type == "speech_to_text":
-        recipe = build_recipe(
+    if workflow_type == "speech_to_text":
+        recipe = _build_recipe(
             ["audio"],
             file_config={
                 "accept": "audio/*",
@@ -592,40 +431,29 @@ async def update_workflow(
                 "required": True,
             },
         )
-        target_config = build_stt_target(
-            language=stt_language or None,
-        )
-        output_action_val = output_action
-
     else:
-        # Legacy pipeline workflow
-        try:
-            pipeline_steps = json.loads(steps_json)
-        except json.JSONDecodeError:
-            pipeline_steps = []
+        # text_transformation, tool, workflow_trigger, custom
+        recipe = _build_recipe(sources, form_fields if form_fields else None,
+                               output_fields if output_fields else None)
 
-    # For new workflow types, keep output_type in sync with output_action.
-    # Legacy pipeline workflows use output_type from the form directly.
-    effective_output_type = output_action_val if output_action_val else output_type
+    parsed_category_id = UUID(category_id) if category_id else None
 
     workflow = await service.update_workflow(
         db=db,
         slug=slug,
         name=name,
         description=description,
-        category=category,
-        output_type=effective_output_type,
-        pipeline_steps=pipeline_steps,
-        is_active=is_active == "on",
+        category_id=parsed_category_id,
         workflow_type=workflow_type or None,
         recipe=recipe,
-        target_config=target_config,
-        output_action=output_action_val,
+        output_action=output_action,
         default_hotkey=default_hotkey or None,
-        llm_provider_id=parsed_llm_provider_id,
-        llm_model=llm_model.strip() or None,
-        stt_provider_id=parsed_stt_provider_id,
-        stt_model=stt_model.strip() or None,
+        is_active=is_active == "on",
+        prompt_template=prompt_template or None,
+        temperature=temperature,
+        llm_model_id=parsed_llm_model_id,
+        stt_model_id=parsed_stt_model_id,
+        tool_id=parsed_tool_id,
     )
     if not workflow:
         raise HTTPException(status_code=404, detail="Workflow not found")
@@ -673,6 +501,8 @@ async def test_workflow(
     test_input: str = Form(""),
 ):
     """Test-execute a workflow and return result as HTML partial."""
+    from src.execution.dispatcher import ExecutionError, execute_workflow
+
     workflow = await service.get_workflow(db, slug)
     if not workflow:
         return templates.TemplateResponse("partials/test_result.html", {
@@ -687,33 +517,22 @@ async def test_workflow(
     input_data = {"text": test_input, "context": {}}
 
     try:
-        # Use new HTTP executor for generic workflows, pipeline for legacy
-        if workflow.workflow_type:
-            result = await execute_http_workflow(
-                workflow=workflow,
-                input_data=input_data,
-                db=db,
-                user_id=user.id,
-                client_version="admin-gui",
-                client_platform="web",
-            )
-        else:
-            result = await execute_pipeline(
-                workflow=workflow,
-                input_data=input_data,
-                db=db,
-                user_id=user.id,
-                client_version="admin-gui",
-                client_platform="web",
-            )
+        result = await execute_workflow(
+            workflow=workflow,
+            input_data=input_data,
+            db=db,
+            user_id=user.id,
+            client_version="admin-gui",
+            client_platform="web",
+        )
         return templates.TemplateResponse("partials/test_result.html", {
             "request": request,
             "success": True,
             "error": None,
             "output": result.get("text", ""),
-            "duration_ms": result.get("metadata", {}).get("duration_ms"),
+            "duration_ms": result.get("duration_ms"),
         })
-    except (PipelineExecutionError, HttpExecutionError) as e:
+    except ExecutionError as e:
         return templates.TemplateResponse("partials/test_result.html", {
             "request": request,
             "success": False,
@@ -723,283 +542,333 @@ async def test_workflow(
         })
 
 
-# --- Ollama Models API (for form dropdowns) ---
-
-@router.get("/api/models")
-async def get_ollama_models():
-    """Return available Ollama models as JSON."""
-    try:
-        model_list = await ollama.list_models()
-        return {"models": [m.get("name", m.get("model", "")) for m in model_list]}
-    except OllamaError as e:
-        return {"models": [], "error": str(e)}
-
-
 # ============================================================
-# Tool Provider Admin Routes
+# Tool Admin Routes
 # ============================================================
 
 
 @router.get("/tools", response_class=HTMLResponse)
 async def tools_list(request: Request, db: DbSession):
-    """Tool provider overview page."""
-    providers = await registry.list_providers(db)
+    """Tool overview page."""
+    result = await db.execute(
+        select(Tool).options(selectinload(Tool.workflows)).order_by(Tool.name)
+    )
+    tools = list(result.scalars().all())
     return templates.TemplateResponse("tools.html", {
         "request": request,
-        "providers": providers,
+        "tools": tools,
         **_flash_context(request),
     })
 
 
 @router.get("/tools/new", response_class=HTMLResponse)
 async def new_tool_form(request: Request):
-    """Show register tool provider form."""
+    """Show create tool form."""
     return templates.TemplateResponse("tool_form.html", {
         "request": request,
-        "provider": None,
+        "tool": None,
         "edit_mode": False,
     })
 
 
 @router.post("/tools")
-async def create_tool_provider(
+async def create_tool(
     request: Request,
     db: DbSession,
-    provider_type: str = Form(...),
     name: str = Form(...),
-    base_url: str = Form(...),
-    api_key: str = Form(""),
+    tool_type: str = Form(...),
+    endpoint_url: str = Form(""),
+    http_method: str = Form("POST"),
+    headers: str = Form(""),
+    payload_template: str = Form(""),
+    response_mapping: str = Form(""),
+    timeout: int = Form(120),
+    description: str = Form(""),
+    input_schema: str = Form(""),
+    output_schema: str = Form(""),
+    # n8n-specific fields
+    n8n_base_url: str = Form(""),
+    n8n_api_key: str = Form(""),
+    n8n_flow_id: str = Form(""),
 ):
-    """Register a new tool provider."""
-    validate_provider_url(base_url)
-    provider = ToolProviderModel(
-        provider_type=provider_type,
+    """Register a new tool."""
+    if endpoint_url:
+        validate_provider_url(endpoint_url)
+    if n8n_base_url:
+        validate_provider_url(n8n_base_url)
+
+    # Parse JSON fields
+    parsed_headers = None
+    if headers.strip():
+        try:
+            parsed_headers = json.loads(headers)
+        except json.JSONDecodeError:
+            parsed_headers = {}
+            for line in headers.strip().split("\n"):
+                if ":" in line:
+                    k, v = line.split(":", 1)
+                    parsed_headers[k.strip()] = v.strip()
+
+    parsed_input_schema = None
+    if input_schema.strip():
+        try:
+            parsed_input_schema = json.loads(input_schema)
+        except json.JSONDecodeError:
+            pass
+
+    parsed_output_schema = None
+    if output_schema.strip():
+        try:
+            parsed_output_schema = json.loads(output_schema)
+        except json.JSONDecodeError:
+            pass
+
+    tool = Tool(
         name=name,
-        base_url=base_url,
-        api_key=encrypt_api_key(api_key) if api_key else None,
+        tool_type=tool_type,
+        endpoint_url=endpoint_url or None,
+        http_method=http_method,
+        headers=parsed_headers,
+        payload_template=payload_template or None,
+        response_mapping=response_mapping or None,
+        timeout=timeout,
+        description=description or None,
+        input_schema=parsed_input_schema,
+        output_schema=parsed_output_schema,
+        n8n_base_url=n8n_base_url or None,
+        n8n_api_key=encrypt_api_key(n8n_api_key) if n8n_api_key else None,
+        n8n_flow_id=n8n_flow_id or None,
     )
-    db.add(provider)
+    db.add(tool)
     await db.commit()
-    return RedirectResponse(f"/admin/tools/{provider.id}?flash=created", status_code=303)
+    return RedirectResponse(f"/admin/tools/{tool.id}?flash=created", status_code=303)
 
 
-@router.get("/tools/{provider_id}", response_class=HTMLResponse)
-async def tool_detail(request: Request, provider_id: UUID, db: DbSession):
-    """Show tool provider detail page."""
-    provider = await registry.get_provider_model(db, provider_id)
-    if not provider:
-        raise HTTPException(status_code=404, detail="Tool provider not found")
+@router.get("/tools/{tool_id}", response_class=HTMLResponse)
+async def tool_detail(request: Request, tool_id: UUID, db: DbSession):
+    """Show tool detail page."""
+    tool = await db.get(Tool, tool_id)
+    if not tool:
+        raise HTTPException(status_code=404, detail="Tool not found")
 
     # Get linked workflows
     result = await db.execute(
         select(Workflow).where(
-            Workflow.tool_provider_id == provider_id,
-            Workflow.execution_type == "tool",
+            Workflow.tool_id == tool_id,
         ).order_by(Workflow.name)
     )
     linked_workflows = list(result.scalars().all())
 
     return templates.TemplateResponse("tool_detail.html", {
         "request": request,
-        "provider": provider,
+        "tool": tool,
         "linked_workflows": linked_workflows,
         **_flash_context(request),
     })
 
 
-@router.get("/tools/{provider_id}/edit", response_class=HTMLResponse)
-async def edit_tool_form(request: Request, provider_id: UUID, db: DbSession):
-    """Show edit tool provider form."""
-    provider = await registry.get_provider_model(db, provider_id)
-    if not provider:
-        raise HTTPException(status_code=404, detail="Tool provider not found")
+@router.get("/tools/{tool_id}/edit", response_class=HTMLResponse)
+async def edit_tool_form(request: Request, tool_id: UUID, db: DbSession):
+    """Show edit tool form."""
+    tool = await db.get(Tool, tool_id)
+    if not tool:
+        raise HTTPException(status_code=404, detail="Tool not found")
 
     return templates.TemplateResponse("tool_form.html", {
         "request": request,
-        "provider": provider,
+        "tool": tool,
         "edit_mode": True,
     })
 
 
-@router.post("/tools/{provider_id}/update")
-async def update_tool_provider(
+@router.post("/tools/{tool_id}/update")
+async def update_tool(
     request: Request,
-    provider_id: UUID,
+    tool_id: UUID,
     db: DbSession,
     name: str = Form(...),
-    base_url: str = Form(...),
-    api_key: str = Form(""),
+    tool_type: str = Form(...),
+    endpoint_url: str = Form(""),
+    http_method: str = Form("POST"),
+    headers: str = Form(""),
+    payload_template: str = Form(""),
+    response_mapping: str = Form(""),
+    timeout: int = Form(120),
+    description: str = Form(""),
+    input_schema: str = Form(""),
+    output_schema: str = Form(""),
     is_active: str = Form("off"),
+    # n8n-specific fields
+    n8n_base_url: str = Form(""),
+    n8n_api_key: str = Form(""),
+    n8n_flow_id: str = Form(""),
 ):
-    """Update a tool provider."""
-    validate_provider_url(base_url)
-    provider = await registry.get_provider_model(db, provider_id)
-    if not provider:
-        raise HTTPException(status_code=404, detail="Tool provider not found")
+    """Update a tool."""
+    if endpoint_url:
+        validate_provider_url(endpoint_url)
+    if n8n_base_url:
+        validate_provider_url(n8n_base_url)
 
-    provider.name = name
-    provider.base_url = base_url
-    if api_key:
-        provider.api_key = encrypt_api_key(api_key)
-    provider.is_active = is_active == "on"
+    tool = await db.get(Tool, tool_id)
+    if not tool:
+        raise HTTPException(status_code=404, detail="Tool not found")
+
+    tool.name = name
+    tool.tool_type = tool_type
+    tool.endpoint_url = endpoint_url or None
+    tool.http_method = http_method
+    tool.timeout = timeout
+    tool.description = description or None
+    tool.is_active = is_active == "on"
+    tool.payload_template = payload_template or None
+    tool.response_mapping = response_mapping or None
+    tool.n8n_base_url = n8n_base_url or None
+    tool.n8n_flow_id = n8n_flow_id or None
+
+    if n8n_api_key:
+        tool.n8n_api_key = encrypt_api_key(n8n_api_key)
+
+    # Parse JSON fields
+    if headers.strip():
+        try:
+            tool.headers = json.loads(headers)
+        except json.JSONDecodeError:
+            parsed = {}
+            for line in headers.strip().split("\n"):
+                if ":" in line:
+                    k, v = line.split(":", 1)
+                    parsed[k.strip()] = v.strip()
+            tool.headers = parsed
+    else:
+        tool.headers = None
+
+    if input_schema.strip():
+        try:
+            tool.input_schema = json.loads(input_schema)
+        except json.JSONDecodeError:
+            pass
+    else:
+        tool.input_schema = None
+
+    if output_schema.strip():
+        try:
+            tool.output_schema = json.loads(output_schema)
+        except json.JSONDecodeError:
+            pass
+    else:
+        tool.output_schema = None
 
     await db.commit()
-    return RedirectResponse(f"/admin/tools/{provider_id}?flash=updated", status_code=303)
+    return RedirectResponse(f"/admin/tools/{tool_id}?flash=updated", status_code=303)
 
 
-@router.post("/tools/{provider_id}/delete")
-async def delete_tool_provider(provider_id: UUID, db: DbSession):
-    """Delete a tool provider."""
-    provider = await registry.get_provider_model(db, provider_id)
-    if not provider:
-        raise HTTPException(status_code=404, detail="Tool provider not found")
+@router.post("/tools/{tool_id}/delete")
+async def delete_tool(tool_id: UUID, db: DbSession):
+    """Delete a tool."""
+    tool = await db.get(Tool, tool_id)
+    if not tool:
+        raise HTTPException(status_code=404, detail="Tool not found")
 
-    await db.delete(provider)
+    await db.delete(tool)
     await db.commit()
     return RedirectResponse("/admin/tools?flash=deleted", status_code=303)
 
 
-@router.post("/tools/{provider_id}/health-check", response_class=HTMLResponse)
-async def tool_health_check(request: Request, provider_id: UUID, db: DbSession):
-    """HTMX: Run health check and return partial."""
+@router.post("/tools/{tool_id}/health-check", response_class=HTMLResponse)
+async def tool_health_check(request: Request, tool_id: UUID, db: DbSession):
+    """HTMX: Run health check for a tool and return partial."""
+    from datetime import datetime, timezone
+    import httpx
+
+    tool = await db.get(Tool, tool_id)
+    if not tool:
+        return templates.TemplateResponse("partials/health_result.html", {
+            "request": request, "healthy": False, "message": "Tool not found",
+        })
+
     try:
-        result = await registry.check_health(db, provider_id)
+        url = tool.endpoint_url or tool.n8n_base_url
+        if not url:
+            raise Exception("No URL configured")
+        async with httpx.AsyncClient(timeout=10) as client:
+            resp = await client.get(url)
+            healthy = resp.status_code < 500
+        tool.health_status = "healthy" if healthy else "unhealthy"
+        tool.last_health_check = datetime.now(timezone.utc)
+        await db.flush()
         return templates.TemplateResponse("partials/health_result.html", {
             "request": request,
-            "healthy": result.get("healthy", False),
-            "message": result.get("message", ""),
+            "healthy": healthy,
+            "message": "" if healthy else f"HTTP {resp.status_code}",
         })
-    except ToolProviderError as e:
+    except Exception as e:
+        tool.health_status = "unhealthy"
+        tool.last_health_check = datetime.now(timezone.utc)
+        await db.flush()
         return templates.TemplateResponse("partials/health_result.html", {
             "request": request,
             "healthy": False,
-            "message": e.message,
+            "message": str(e),
         })
 
 
-@router.get("/tools/{provider_id}/discover", response_class=HTMLResponse)
-async def discover_flows(request: Request, provider_id: UUID, db: DbSession):
-    """HTMX: Discover flows from a provider and return partial."""
+@router.post("/tools/discover-runner", response_class=HTMLResponse)
+async def discover_runner_tools(request: Request, db: DbSession):
+    """HTMX: Discover tools from the Ancroo Runner and return partial."""
     try:
-        flows = await sync.discover_flows(db, provider_id)
-    except ToolProviderError as e:
+        settings = get_settings()
+        report = await sync_tools_from_runner(db, settings.runner_base_url)
+        await db.commit()
+        return HTMLResponse(
+            f'<div class="text-xs bg-green-50 text-green-700 border border-green-200 rounded p-2">'
+            f'Discovery complete: {report.get("created", 0)} created, '
+            f'{report.get("updated", 0)} updated, '
+            f'{report.get("unchanged", 0)} unchanged.</div>'
+        )
+    except RunnerDiscoveryError as e:
         return HTMLResponse(
             f'<div class="text-xs bg-red-50 text-red-700 border border-red-200 rounded p-2">'
-            f'Discovery failed: {e.message}</div>'
+            f'Discovery failed: {e}</div>'
         )
-
-    # Check which flows are already imported
-    existing = await db.execute(
-        select(Workflow.external_flow_id).where(
-            Workflow.tool_provider_id == provider_id,
-            Workflow.execution_type == "tool",
-        )
-    )
-    imported_ids = {row[0] for row in existing.all()}
-
-    flow_items = []
-    for f in flows:
-        flow_items.append({
-            "id": f["id"],
-            "name": f.get("name", f["id"]),
-            "description": f.get("description", ""),
-            "status": f.get("status", "ENABLED"),
-            "trigger_type": f.get("trigger_type", ""),
-            "has_webhook": f.get("has_webhook", False),
-            "already_imported": f["id"] in imported_ids,
-        })
-
-    return templates.TemplateResponse("partials/flow_list.html", {
-        "request": request,
-        "flows": flow_items,
-        "provider_id": provider_id,
-    })
-
-
-@router.post("/tools/{provider_id}/import", response_class=HTMLResponse)
-async def import_flow(
-    request: Request,
-    provider_id: UUID,
-    db: DbSession,
-    flow_id: str = Form(...),
-    flow_name: str = Form(...),
-):
-    """HTMX: Import a flow as an Ancroo workflow."""
-    try:
-        workflow = await sync.import_flow(
-            db=db,
-            provider_id=provider_id,
-            flow_data={"id": flow_id, "name": flow_name},
-        )
-        return templates.TemplateResponse("partials/import_result.html", {
-            "request": request,
-            "flow_name": flow_name,
-            "workflow_slug": workflow.slug,
-        })
-    except ToolProviderError as e:
-        return HTMLResponse(
-            f'<div class="text-xs bg-red-50 text-red-700 rounded p-2">Import failed: {e.message}</div>'
-        )
-
-
-@router.post("/tools/{provider_id}/sync", response_class=HTMLResponse)
-async def sync_workflows(request: Request, provider_id: UUID, db: DbSession):
-    """HTMX: Sync workflows with a provider."""
-    try:
-        report = await sync.sync_workflows(db, provider_id)
-        return templates.TemplateResponse("partials/sync_result.html", {
-            "request": request,
-            "error": None,
-            **report,
-        })
-    except ToolProviderError as e:
-        return templates.TemplateResponse("partials/sync_result.html", {
-            "request": request,
-            "error": e.message,
-        })
 
 
 # ============================================================
-# LLM Provider Admin Routes
+# LLM Model Admin Routes
 # ============================================================
 
 
-@router.get("/llm-providers", response_class=HTMLResponse)
-async def llm_providers_list(request: Request, db: DbSession):
-    """LLM provider overview page."""
+@router.get("/llm-models", response_class=HTMLResponse)
+async def llm_models_list(request: Request, db: DbSession):
+    """LLM model overview page."""
     result = await db.execute(
-        select(LLMProviderModel)
-        .options(selectinload(LLMProviderModel.workflows))
-        .order_by(LLMProviderModel.name)
+        select(LLMModel).options(selectinload(LLMModel.workflows)).order_by(LLMModel.name)
     )
-    providers = list(result.scalars().all())
-    return templates.TemplateResponse("llm_providers.html", {
+    llm_models = list(result.scalars().all())
+    return templates.TemplateResponse("llm_models.html", {
         "request": request,
-        "providers": providers,
+        "models": llm_models,
         **_flash_context(request),
     })
 
 
-@router.get("/llm-providers/new", response_class=HTMLResponse)
-async def new_llm_provider_form(request: Request):
-    """Show create LLM provider form."""
-    return templates.TemplateResponse("llm_provider_form.html", {
+@router.get("/llm-models/new", response_class=HTMLResponse)
+async def new_llm_model_form(request: Request):
+    """Show create LLM model form."""
+    return templates.TemplateResponse("llm_model_form.html", {
         "request": request,
-        "provider": None,
+        "model": None,
         "edit_mode": False,
     })
 
 
-@router.get("/llm-providers/probe-models", response_class=HTMLResponse)
-async def llm_provider_probe_models(
+@router.get("/llm-models/probe-models", response_class=HTMLResponse)
+async def llm_model_probe_models(
     request: Request,
     provider_type: str = Query("ollama"),
     base_url: str = Query(""),
     api_key: str = Query(""),
 ):
-    """HTMX: Probe available models using form field values (before provider is saved)."""
-    from src.integrations.llm_provider import _ollama_list_models, _openai_list_models
-
+    """HTMX: Probe available models using form field values (before model is saved)."""
     if not base_url:
         return HTMLResponse('<option value="">-- enter Base URL first --</option>')
     try:
@@ -1007,132 +876,150 @@ async def llm_provider_probe_models(
     except HTTPException:
         return HTMLResponse('<option value="">-- invalid URL --</option>')
     try:
-        if provider_type == "ollama":
-            models = await _ollama_list_models(base_url)
-        elif provider_type == "openai_compatible":
-            models = await _openai_list_models(base_url, api_key or None)
-        else:
-            return HTMLResponse('<option value="">-- unknown provider type --</option>')
-    except Exception:
+        models = await list_llm_models(base_url, provider_type, api_key or None)
+    except LLMError:
         return HTMLResponse('<option value="">-- could not reach provider --</option>')
     if not models:
         return HTMLResponse('<option value="">-- no models found --</option>')
-    options = '<option value="">-- no default --</option>'
+    options = '<option value="">-- select a model --</option>'
     for model in models:
         options += f'<option value="{model}">{model}</option>'
     return HTMLResponse(options)
 
 
-@router.post("/llm-providers")
-async def create_llm_provider(
+@router.post("/llm-models")
+async def create_llm_model(
     request: Request,
     db: DbSession,
     provider_type: str = Form(...),
     name: str = Form(...),
     base_url: str = Form(...),
     api_key: str = Form(""),
-    default_model: str = Form(""),
+    model_id: str = Form(...),
+    default_temperature: float = Form(0.3),
+    config: str = Form(""),
 ):
-    """Create a new LLM provider."""
+    """Create a new LLM model."""
     validate_provider_url(base_url)
-    provider = LLMProviderModel(
+
+    parsed_config = None
+    if config.strip():
+        try:
+            parsed_config = json.loads(config)
+        except json.JSONDecodeError:
+            pass
+
+    llm_model = LLMModel(
         provider_type=provider_type,
         name=name,
         base_url=base_url,
         api_key=encrypt_api_key(api_key) if api_key else None,
-        default_model=default_model or None,
+        model_id=model_id,
+        default_temperature=default_temperature,
+        config=parsed_config,
     )
-    db.add(provider)
+    db.add(llm_model)
     await db.commit()
-    return RedirectResponse(f"/admin/llm-providers/{provider.id}?flash=created", status_code=303)
+    return RedirectResponse(f"/admin/llm-models/{llm_model.id}?flash=created", status_code=303)
 
 
-@router.get("/llm-providers/{provider_id}", response_class=HTMLResponse)
-async def llm_provider_detail(request: Request, provider_id: UUID, db: DbSession):
-    """Show LLM provider detail page."""
-    provider = await db.get(LLMProviderModel, provider_id)
-    if not provider:
-        raise HTTPException(status_code=404, detail="LLM provider not found")
+@router.get("/llm-models/{model_id}", response_class=HTMLResponse)
+async def llm_model_detail(request: Request, model_id: UUID, db: DbSession):
+    """Show LLM model detail page."""
+    llm_model = await db.get(LLMModel, model_id)
+    if not llm_model:
+        raise HTTPException(status_code=404, detail="LLM model not found")
 
     result = await db.execute(
         select(Workflow)
-        .where(Workflow.llm_provider_id == provider_id)
+        .where(Workflow.llm_model_id == model_id)
         .order_by(Workflow.name)
     )
     linked_workflows = list(result.scalars().all())
 
-    return templates.TemplateResponse("llm_provider_detail.html", {
+    return templates.TemplateResponse("llm_model_detail.html", {
         "request": request,
-        "provider": provider,
+        "model": llm_model,
         "linked_workflows": linked_workflows,
         **_flash_context(request),
     })
 
 
-@router.get("/llm-providers/{provider_id}/edit", response_class=HTMLResponse)
-async def edit_llm_provider_form(request: Request, provider_id: UUID, db: DbSession):
-    """Show edit LLM provider form."""
-    provider = await db.get(LLMProviderModel, provider_id)
-    if not provider:
-        raise HTTPException(status_code=404, detail="LLM provider not found")
-    return templates.TemplateResponse("llm_provider_form.html", {
+@router.get("/llm-models/{model_id}/edit", response_class=HTMLResponse)
+async def edit_llm_model_form(request: Request, model_id: UUID, db: DbSession):
+    """Show edit LLM model form."""
+    llm_model = await db.get(LLMModel, model_id)
+    if not llm_model:
+        raise HTTPException(status_code=404, detail="LLM model not found")
+    return templates.TemplateResponse("llm_model_form.html", {
         "request": request,
-        "provider": provider,
+        "model": llm_model,
         "edit_mode": True,
     })
 
 
-@router.post("/llm-providers/{provider_id}/update")
-async def update_llm_provider(
+@router.post("/llm-models/{model_id}/update")
+async def update_llm_model(
     request: Request,
-    provider_id: UUID,
+    model_id: UUID,
     db: DbSession,
     name: str = Form(...),
     base_url: str = Form(...),
     api_key: str = Form(""),
-    default_model: str = Form(""),
+    model_id_field: str = Form(..., alias="model_id_field"),
+    default_temperature: float = Form(0.3),
+    config: str = Form(""),
     is_active: str = Form("off"),
 ):
-    """Update an LLM provider."""
+    """Update an LLM model."""
     validate_provider_url(base_url)
-    provider = await db.get(LLMProviderModel, provider_id)
-    if not provider:
-        raise HTTPException(status_code=404, detail="LLM provider not found")
+    llm_model = await db.get(LLMModel, model_id)
+    if not llm_model:
+        raise HTTPException(status_code=404, detail="LLM model not found")
 
-    provider.name = name
-    provider.base_url = base_url
+    llm_model.name = name
+    llm_model.base_url = base_url
     if api_key:
-        provider.api_key = encrypt_api_key(api_key)
-    provider.default_model = default_model or None
-    provider.is_active = is_active == "on"
+        llm_model.api_key = encrypt_api_key(api_key)
+    llm_model.model_id = model_id_field
+    llm_model.default_temperature = default_temperature
+    llm_model.is_active = is_active == "on"
+
+    if config.strip():
+        try:
+            llm_model.config = json.loads(config)
+        except json.JSONDecodeError:
+            pass
+    else:
+        llm_model.config = None
 
     await db.commit()
-    return RedirectResponse(f"/admin/llm-providers/{provider_id}?flash=updated", status_code=303)
+    return RedirectResponse(f"/admin/llm-models/{model_id}?flash=updated", status_code=303)
 
 
-@router.post("/llm-providers/{provider_id}/delete")
-async def delete_llm_provider(provider_id: UUID, db: DbSession):
-    """Delete an LLM provider."""
-    provider = await db.get(LLMProviderModel, provider_id)
-    if not provider:
-        raise HTTPException(status_code=404, detail="LLM provider not found")
-    await db.delete(provider)
+@router.post("/llm-models/{model_id}/delete")
+async def delete_llm_model(model_id: UUID, db: DbSession):
+    """Delete an LLM model."""
+    llm_model = await db.get(LLMModel, model_id)
+    if not llm_model:
+        raise HTTPException(status_code=404, detail="LLM model not found")
+    await db.delete(llm_model)
     await db.commit()
-    return RedirectResponse("/admin/llm-providers?flash=deleted", status_code=303)
+    return RedirectResponse("/admin/llm-models?flash=deleted", status_code=303)
 
 
-@router.post("/llm-providers/{provider_id}/health-check", response_class=HTMLResponse)
-async def llm_provider_health_check(request: Request, provider_id: UUID, db: DbSession):
+@router.post("/llm-models/{model_id}/health-check", response_class=HTMLResponse)
+async def llm_model_health_check(request: Request, model_id: UUID, db: DbSession):
     """HTMX: Run health check and return partial."""
     from datetime import datetime, timezone
-    provider = await db.get(LLMProviderModel, provider_id)
-    if not provider:
+    llm_model = await db.get(LLMModel, model_id)
+    if not llm_model:
         return templates.TemplateResponse("partials/health_result.html", {
-            "request": request, "healthy": False, "message": "Provider not found",
+            "request": request, "healthy": False, "message": "LLM model not found",
         })
-    result = await check_provider_health(provider)
-    provider.health_status = "healthy" if result.get("healthy") else "unhealthy"
-    provider.last_health_check = datetime.now(timezone.utc)
+    result = await check_llm_health(llm_model)
+    llm_model.health_status = "healthy" if result.get("healthy") else "unhealthy"
+    llm_model.last_health_check = datetime.now(timezone.utc)
     await db.flush()
     return templates.TemplateResponse("partials/health_result.html", {
         "request": request,
@@ -1141,170 +1028,192 @@ async def llm_provider_health_check(request: Request, provider_id: UUID, db: DbS
     })
 
 
-@router.get("/llm-providers/{provider_id}/models", response_class=HTMLResponse)
-async def llm_provider_list_models(request: Request, provider_id: UUID, db: DbSession):
-    """HTMX: Fetch available models from provider and return partial."""
-    provider = await db.get(LLMProviderModel, provider_id)
-    if not provider:
-        return HTMLResponse('<p class="text-xs text-red-600">Provider not found</p>')
+@router.get("/llm-models/{model_id}/discover-models", response_class=HTMLResponse)
+async def llm_model_discover_models(request: Request, model_id: UUID, db: DbSession):
+    """HTMX: Fetch available models from LLM provider and return partial."""
+    llm_model = await db.get(LLMModel, model_id)
+    if not llm_model:
+        return HTMLResponse('<p class="text-xs text-red-600">LLM model not found</p>')
     try:
-        models = await list_provider_models(provider)
-    except LLMProviderError as e:
+        models = await list_llm_models(llm_model.base_url, llm_model.provider_type,
+                                       decrypt_api_key(llm_model.api_key) if llm_model.api_key else None)
+    except LLMError as e:
         return HTMLResponse(
-            f'<p class="text-xs text-red-600">Failed to load models: {e.message}</p>'
+            f'<p class="text-xs text-red-600">Failed to load models: {e}</p>'
         )
     return templates.TemplateResponse("partials/llm_models.html", {
         "request": request,
         "models": models,
-        "provider_id": provider_id,
+        "model_id": model_id,
     })
 
 
 # ============================================================
-# STT Provider Admin Routes
+# STT Model Admin Routes
 # ============================================================
 
 
-@router.get("/stt-providers", response_class=HTMLResponse)
-async def stt_providers_list(request: Request, db: DbSession):
-    """STT provider overview page."""
+@router.get("/stt-models", response_class=HTMLResponse)
+async def stt_models_list(request: Request, db: DbSession):
+    """STT model overview page."""
     result = await db.execute(
-        select(STTProviderModel)
-        .options(selectinload(STTProviderModel.workflows))
-        .order_by(STTProviderModel.name)
+        select(STTModel).options(selectinload(STTModel.workflows)).order_by(STTModel.name)
     )
-    providers = list(result.scalars().all())
-    return templates.TemplateResponse("stt_providers.html", {
+    stt_models = list(result.scalars().all())
+    return templates.TemplateResponse("stt_models.html", {
         "request": request,
-        "providers": providers,
+        "models": stt_models,
         **_flash_context(request),
     })
 
 
-@router.get("/stt-providers/new", response_class=HTMLResponse)
-async def new_stt_provider_form(request: Request):
-    """Show create STT provider form."""
-    return templates.TemplateResponse("stt_provider_form.html", {
+@router.get("/stt-models/new", response_class=HTMLResponse)
+async def new_stt_model_form(request: Request):
+    """Show create STT model form."""
+    return templates.TemplateResponse("stt_model_form.html", {
         "request": request,
-        "provider": None,
+        "model": None,
         "edit_mode": False,
     })
 
 
-@router.post("/stt-providers")
-async def create_stt_provider(
+@router.post("/stt-models")
+async def create_stt_model(
     request: Request,
     db: DbSession,
     provider_type: str = Form(...),
     name: str = Form(...),
     base_url: str = Form(...),
     api_key: str = Form(""),
-    default_model: str = Form(...),
+    model_id: str = Form(...),
     default_language: str = Form(""),
+    config: str = Form(""),
+    is_default: str = Form("off"),
 ):
-    """Create a new STT provider."""
+    """Create a new STT model."""
     validate_provider_url(base_url)
-    provider = STTProviderModel(
+
+    parsed_config = None
+    if config.strip():
+        try:
+            parsed_config = json.loads(config)
+        except json.JSONDecodeError:
+            pass
+
+    stt_model = STTModel(
         provider_type=provider_type,
         name=name,
         base_url=base_url,
         api_key=encrypt_api_key(api_key) if api_key else None,
-        default_model=default_model,
+        model_id=model_id,
         default_language=default_language.strip() or None,
+        config=parsed_config,
+        is_default=is_default == "on",
     )
-    db.add(provider)
+    db.add(stt_model)
     await db.commit()
-    return RedirectResponse(f"/admin/stt-providers/{provider.id}?flash=created", status_code=303)
+    return RedirectResponse(f"/admin/stt-models/{stt_model.id}?flash=created", status_code=303)
 
 
-@router.get("/stt-providers/{provider_id}", response_class=HTMLResponse)
-async def stt_provider_detail(request: Request, provider_id: UUID, db: DbSession):
-    """Show STT provider detail page."""
-    provider = await db.get(STTProviderModel, provider_id)
-    if not provider:
-        raise HTTPException(status_code=404, detail="STT provider not found")
+@router.get("/stt-models/{model_id}", response_class=HTMLResponse)
+async def stt_model_detail(request: Request, model_id: UUID, db: DbSession):
+    """Show STT model detail page."""
+    stt_model = await db.get(STTModel, model_id)
+    if not stt_model:
+        raise HTTPException(status_code=404, detail="STT model not found")
 
     result = await db.execute(
         select(Workflow)
-        .where(Workflow.stt_provider_id == provider_id)
+        .where(Workflow.stt_model_id == model_id)
         .order_by(Workflow.name)
     )
     linked_workflows = list(result.scalars().all())
 
-    return templates.TemplateResponse("stt_provider_detail.html", {
+    return templates.TemplateResponse("stt_model_detail.html", {
         "request": request,
-        "provider": provider,
+        "model": stt_model,
         "linked_workflows": linked_workflows,
         **_flash_context(request),
     })
 
 
-@router.get("/stt-providers/{provider_id}/edit", response_class=HTMLResponse)
-async def edit_stt_provider_form(request: Request, provider_id: UUID, db: DbSession):
-    """Show edit STT provider form."""
-    provider = await db.get(STTProviderModel, provider_id)
-    if not provider:
-        raise HTTPException(status_code=404, detail="STT provider not found")
-    return templates.TemplateResponse("stt_provider_form.html", {
+@router.get("/stt-models/{model_id}/edit", response_class=HTMLResponse)
+async def edit_stt_model_form(request: Request, model_id: UUID, db: DbSession):
+    """Show edit STT model form."""
+    stt_model = await db.get(STTModel, model_id)
+    if not stt_model:
+        raise HTTPException(status_code=404, detail="STT model not found")
+    return templates.TemplateResponse("stt_model_form.html", {
         "request": request,
-        "provider": provider,
+        "model": stt_model,
         "edit_mode": True,
     })
 
 
-@router.post("/stt-providers/{provider_id}/update")
-async def update_stt_provider(
+@router.post("/stt-models/{model_id}/update")
+async def update_stt_model(
     request: Request,
-    provider_id: UUID,
+    model_id: UUID,
     db: DbSession,
     name: str = Form(...),
     base_url: str = Form(...),
     api_key: str = Form(""),
-    default_model: str = Form(...),
+    model_id_field: str = Form(..., alias="model_id_field"),
     default_language: str = Form(""),
+    config: str = Form(""),
     is_active: str = Form("off"),
+    is_default: str = Form("off"),
 ):
-    """Update an STT provider."""
+    """Update an STT model."""
     validate_provider_url(base_url)
-    provider = await db.get(STTProviderModel, provider_id)
-    if not provider:
-        raise HTTPException(status_code=404, detail="STT provider not found")
+    stt_model = await db.get(STTModel, model_id)
+    if not stt_model:
+        raise HTTPException(status_code=404, detail="STT model not found")
 
-    provider.name = name
-    provider.base_url = base_url
+    stt_model.name = name
+    stt_model.base_url = base_url
     if api_key:
-        provider.api_key = encrypt_api_key(api_key)
-    provider.default_model = default_model
-    provider.default_language = default_language.strip() or None
-    provider.is_active = is_active == "on"
+        stt_model.api_key = encrypt_api_key(api_key)
+    stt_model.model_id = model_id_field
+    stt_model.default_language = default_language.strip() or None
+    stt_model.is_active = is_active == "on"
+    stt_model.is_default = is_default == "on"
+
+    if config.strip():
+        try:
+            stt_model.config = json.loads(config)
+        except json.JSONDecodeError:
+            pass
+    else:
+        stt_model.config = None
 
     await db.commit()
-    return RedirectResponse(f"/admin/stt-providers/{provider_id}?flash=updated", status_code=303)
+    return RedirectResponse(f"/admin/stt-models/{model_id}?flash=updated", status_code=303)
 
 
-@router.post("/stt-providers/{provider_id}/delete")
-async def delete_stt_provider(provider_id: UUID, db: DbSession):
-    """Delete an STT provider."""
-    provider = await db.get(STTProviderModel, provider_id)
-    if not provider:
-        raise HTTPException(status_code=404, detail="STT provider not found")
-    await db.delete(provider)
+@router.post("/stt-models/{model_id}/delete")
+async def delete_stt_model(model_id: UUID, db: DbSession):
+    """Delete an STT model."""
+    stt_model = await db.get(STTModel, model_id)
+    if not stt_model:
+        raise HTTPException(status_code=404, detail="STT model not found")
+    await db.delete(stt_model)
     await db.commit()
-    return RedirectResponse("/admin/stt-providers?flash=deleted", status_code=303)
+    return RedirectResponse("/admin/stt-models?flash=deleted", status_code=303)
 
 
-@router.post("/stt-providers/{provider_id}/health-check", response_class=HTMLResponse)
-async def stt_provider_health_check(request: Request, provider_id: UUID, db: DbSession):
+@router.post("/stt-models/{model_id}/health-check", response_class=HTMLResponse)
+async def stt_model_health_check(request: Request, model_id: UUID, db: DbSession):
     """HTMX: Run health check and return partial."""
     from datetime import datetime, timezone
-    provider = await db.get(STTProviderModel, provider_id)
-    if not provider:
+    stt_model = await db.get(STTModel, model_id)
+    if not stt_model:
         return templates.TemplateResponse("partials/health_result.html", {
-            "request": request, "healthy": False, "message": "Provider not found",
+            "request": request, "healthy": False, "message": "STT model not found",
         })
-    result = await check_stt_health(provider)
-    provider.health_status = "healthy" if result.get("healthy") else "unhealthy"
-    provider.last_health_check = datetime.now(timezone.utc)
+    result = await check_stt_health(stt_model)
+    stt_model.health_status = "healthy" if result.get("healthy") else "unhealthy"
+    stt_model.last_health_check = datetime.now(timezone.utc)
     await db.flush()
     return templates.TemplateResponse("partials/health_result.html", {
         "request": request,
@@ -1313,23 +1222,106 @@ async def stt_provider_health_check(request: Request, provider_id: UUID, db: DbS
     })
 
 
-@router.get("/stt-providers/{provider_id}/models", response_class=HTMLResponse)
-async def stt_provider_list_models(request: Request, provider_id: UUID, db: DbSession):
+@router.get("/stt-models/{model_id}/discover-models", response_class=HTMLResponse)
+async def stt_model_discover_models(request: Request, model_id: UUID, db: DbSession):
     """HTMX: Fetch available models from STT provider and return partial."""
-    provider = await db.get(STTProviderModel, provider_id)
-    if not provider:
-        return HTMLResponse('<p class="text-xs text-red-600">Provider not found</p>')
+    stt_model = await db.get(STTModel, model_id)
+    if not stt_model:
+        return HTMLResponse('<p class="text-xs text-red-600">STT model not found</p>')
     try:
-        models = await list_stt_models(provider)
-    except STTProviderError as e:
+        models = await list_stt_models(stt_model.base_url)
+    except STTError as e:
         return HTMLResponse(
-            f'<p class="text-xs text-red-600">Failed to load models: {e.message}</p>'
+            f'<p class="text-xs text-red-600">Failed to load models: {e}</p>'
         )
     return templates.TemplateResponse("partials/stt_models.html", {
         "request": request,
         "models": models,
-        "provider_id": provider_id,
+        "model_id": model_id,
     })
+
+
+# --- Categories ---
+
+
+@router.get("/categories", response_class=HTMLResponse)
+async def categories_list(request: Request, db: DbSession):
+    """List all categories."""
+    categories = await service.list_categories(db)
+    return templates.TemplateResponse("categories.html", {
+        "request": request,
+        "categories": categories,
+        **_flash_context(request),
+    })
+
+
+@router.get("/categories/new", response_class=HTMLResponse)
+async def new_category_form(request: Request):
+    """Show category creation form."""
+    return templates.TemplateResponse("category_form.html", {
+        "request": request,
+        "category": None,
+        "edit_mode": False,
+    })
+
+
+@router.post("/categories")
+async def create_category(request: Request, db: DbSession, name: str = Form(...), icon: str = Form("\U0001f527")):
+    """Create a new category."""
+    existing = await service.get_category_by_name(db, name)
+    if existing:
+        return templates.TemplateResponse("category_form.html", {
+            "request": request,
+            "category": None,
+            "edit_mode": False,
+            "flash_message": f"Category '{name}' already exists.",
+            "flash_type": "error",
+        })
+    await service.create_category(db, name=name, icon=icon)
+    await db.commit()
+    return RedirectResponse("/admin/categories?flash=created", status_code=303)
+
+
+@router.get("/categories/{category_id}/edit", response_class=HTMLResponse)
+async def edit_category_form(request: Request, category_id: UUID, db: DbSession):
+    """Show category edit form."""
+    category = await service.get_category(db, category_id)
+    if not category:
+        raise HTTPException(status_code=404, detail="Category not found")
+    return templates.TemplateResponse("category_form.html", {
+        "request": request,
+        "category": category,
+        "edit_mode": True,
+    })
+
+
+@router.post("/categories/{category_id}/update")
+async def update_category_route(
+    request: Request, category_id: UUID, db: DbSession,
+    name: str = Form(...), icon: str = Form("\U0001f527"),
+):
+    """Update a category."""
+    category = await service.update_category(db, category_id, name=name, icon=icon)
+    if not category:
+        raise HTTPException(status_code=404, detail="Category not found")
+    await db.commit()
+    return RedirectResponse("/admin/categories?flash=updated", status_code=303)
+
+
+@router.post("/categories/{category_id}/delete")
+async def delete_category_route(request: Request, category_id: UUID, db: DbSession):
+    """Delete a category (only if no workflows assigned)."""
+    success, message = await service.delete_category(db, category_id)
+    if not success:
+        categories = await service.list_categories(db)
+        return templates.TemplateResponse("categories.html", {
+            "request": request,
+            "categories": categories,
+            "flash_message": message,
+            "flash_type": "error",
+        })
+    await db.commit()
+    return RedirectResponse("/admin/categories?flash=deleted", status_code=303)
 
 
 # --- About ---

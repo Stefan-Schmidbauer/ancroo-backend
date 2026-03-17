@@ -1,50 +1,29 @@
-<!-- Text Transformation: simple LLM workflow -->
-{% set name_placeholder = "e.g. Fix grammar" %}
+<!-- Tool: select an existing tool (n8n webhook, AR plugin, custom API) -->
+{% set name_placeholder = "e.g. Freight Calculator" %}
 {% include 'partials/_form_header.html' %}
 
-{% set default_collect = 'text_selection' %}
+{% set default_collect = 'form_fields' %}
 {% include 'partials/_input_sources.html' %}
 
+<!-- Target Configuration -->
 <div class="bg-white rounded-lg border p-4 mb-4">
-    <h2 class="text-sm font-semibold text-gray-700 mb-3">Text Transformation</h2>
+    <h2 class="text-sm font-semibold text-gray-700 mb-3">Target</h2>
 
-    <div class="mb-3">
-        <label class="block text-sm text-gray-600 mb-1">LLM Model</label>
-        <select name="llm_model_id" required
+    <div>
+        <label class="block text-sm text-gray-600 mb-1">Tool</label>
+        <select name="tool_id" required
             class="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
-            <option value="">— Select LLM Model —</option>
-            {% for model in llm_models %}
-            <option value="{{ model.id }}" {{ 'selected' if workflow and workflow.llm_model_id == model.id }}>
-                {{ model.name }}{% if model.model_id %} ({{ model.model_id }}){% endif %}
+            <option value="">-- Select Tool --</option>
+            {% for tool in tools %}
+            <option value="{{ tool.id }}" {{ 'selected' if workflow and workflow.tool_id == tool.id }}>
+                {{ tool.name }}
+                <span class="text-gray-400">({{ tool.tool_type | replace('_', ' ') }})</span>
             </option>
             {% endfor %}
         </select>
         <p class="text-xs text-gray-400 mt-1">
-            Manage models under <a href="/admin/llm-models" class="text-blue-500 hover:underline">LLM Models</a>.
+            Manage tools under <a href="/admin/tools" class="text-blue-500 hover:underline">Tools</a>.
         </p>
-    </div>
-
-    <div class="mb-3">
-        <label class="block text-sm text-gray-600 mb-1">Prompt Template</label>
-        <textarea name="prompt_template" rows="5"
-            class="w-full border rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500"
-            placeholder="Fix grammar and spelling in the following text. Return only the corrected text:&#10;&#10;{{text}}">{{ workflow.prompt_template if workflow and workflow.prompt_template else '' }}</textarea>
-        <p class="text-xs text-gray-400 mt-1">
-            Use <code class="bg-gray-100 px-1 rounded">{{ '{{text}}' }}</code> for the selected text,
-            <code class="bg-gray-100 px-1 rounded">{{ '{{url}}' }}</code> and
-            <code class="bg-gray-100 px-1 rounded">{{ '{{title}}' }}</code> for page context.
-        </p>
-    </div>
-
-    <div>
-        {% set _temp = workflow.temperature if workflow and workflow.temperature is not none else 0.3 %}
-        <label class="block text-sm text-gray-600 mb-1">
-            Temperature: <span id="temp-display">{{ _temp }}</span>
-        </label>
-        <input type="range" name="temperature" min="0" max="1" step="0.1"
-            value="{{ _temp }}"
-            oninput="document.getElementById('temp-display').textContent = this.value"
-            class="w-full">
     </div>
 </div>
 
@@ -52,11 +31,11 @@
 <div class="bg-white rounded-lg border p-4 mb-4">
     <h2 class="text-sm font-semibold text-gray-700 mb-3">Output</h2>
 
-    {% set _action = workflow.output_action | default('replace_selection', boolean=True) %}
+    {% set _action = workflow.output_action | default('notification', boolean=True) %}
 
     <div class="grid grid-cols-2 gap-3">
         <div>
-            <label class="block text-sm text-gray-600 mb-1">Output Action</label>
+            <label class="block text-sm text-gray-600 mb-1">Action</label>
             <select name="output_action" class="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
                 <option value="replace_selection" {{ 'selected' if _action == 'replace_selection' }}>Replace Selection</option>
                 <option value="insert_before" {{ 'selected' if _action == 'insert_before' }}>Insert Before Selection</option>
@@ -65,7 +44,7 @@
                 <option value="fill_fields" {{ 'selected' if _action == 'fill_fields' }}>Fill Fields</option>
                 <option value="side_panel_only" {{ 'selected' if _action == 'side_panel_only' }}>Show in Side Panel</option>
                 <option value="download_file" {{ 'selected' if _action == 'download_file' }}>Download as File</option>
-                <option value="notification" {{ 'selected' if _action == 'notification' }}>Notification</option>
+                <option value="notification" {{ 'selected' if _action in ('notification', 'show_notification') }}>Notification</option>
                 <option value="none" {{ 'selected' if _action == 'none' }}>None</option>
             </select>
         </div>
@@ -74,7 +53,7 @@
             <input type="text" name="default_hotkey"
                 value="{{ workflow.default_hotkey | default('', boolean=True) }}"
                 class="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                placeholder="e.g. ctrl+shift+g">
+                placeholder="e.g. ctrl+shift+e">
         </div>
     </div>
 

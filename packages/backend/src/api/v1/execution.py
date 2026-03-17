@@ -12,8 +12,7 @@ from sqlalchemy import select
 from src.config import get_settings
 from src.db.models import Workflow
 from src.auth.permissions import can_user_access_workflow
-from src.workflows.pipeline_executor import execute_pipeline, PipelineExecutionError
-from src.execution.http_executor import execute_http_workflow, HttpExecutionError
+from src.execution.dispatcher import ExecutionError, execute_workflow
 from src.utils.audio import NATIVE_AUDIO_TYPES, AudioConversionError, convert_audio_to_wav
 from src.api.v1.schemas import (
     ExecuteWorkflowRequest,
@@ -28,7 +27,7 @@ logger = logging.getLogger(__name__)
 
 
 @router.post("/{slug}/execute", response_model=ExecuteWorkflowResponse)
-async def execute_workflow(
+async def execute_workflow_endpoint(
     slug: str,
     request: ExecuteWorkflowRequest,
     user: CurrentUser,
@@ -41,28 +40,28 @@ async def execute_workflow(
     """
     # Find workflow by slug
     result = await db.execute(select(Workflow).where(Workflow.slug == slug))
-    workflow = result.scalar_one_or_none()
+    wf = result.scalar_one_or_none()
 
-    if not workflow:
+    if not wf:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Workflow '{slug}' not found",
         )
 
     # Check permission
-    if not await can_user_access_workflow(db, user, workflow.id):
+    if not await can_user_access_workflow(db, user, wf.id):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="You don't have access to this workflow",
         )
 
-    if not workflow.is_active:
+    if not wf.is_active:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="This workflow is currently inactive",
         )
 
-    # Prepare input data — support both legacy and new format
+    # Prepare input data
     input_data = {
         "text": request.input_data.text,
         "html": request.input_data.html,
@@ -72,33 +71,16 @@ async def execute_workflow(
         input_data["clipboard"] = request.input_data.clipboard
     if request.input_data.fields:
         input_data["fields"] = request.input_data.fields
-    if request.client_script_result:
-        input_data["client_result"] = request.client_script_result
 
     try:
-        if workflow.workflow_type:
-            output = await execute_http_workflow(
-                workflow=workflow,
-                input_data=input_data,
-                db=db,
-                user_id=user.id,
-                client_version=request.client_version,
-                client_platform=request.client_platform,
-            )
-        elif workflow.execution_type == "pipeline":
-            output = await execute_pipeline(
-                workflow=workflow,
-                input_data=input_data,
-                db=db,
-                user_id=user.id,
-                client_version=request.client_version,
-                client_platform=request.client_platform,
-            )
-        else:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Workflow has no execution target configured",
-            )
+        output = await execute_workflow(
+            workflow=wf,
+            input_data=input_data,
+            db=db,
+            user_id=user.id,
+            client_version=request.client_version,
+            client_platform=request.client_platform,
+        )
 
         result_data = ExecutionResult(
             text=output.get("text"),
@@ -111,13 +93,13 @@ async def execute_workflow(
         execution_log_id = output.get("execution_log_id")
 
         return ExecuteWorkflowResponse(
-            execution_id=UUID(execution_log_id) if execution_log_id else workflow.id,
+            execution_id=UUID(execution_log_id) if execution_log_id else wf.id,
             status="success",
             result=result_data,
             duration_ms=output.get("duration_ms"),
         )
 
-    except (HttpExecutionError, PipelineExecutionError) as e:
+    except ExecutionError as e:
         return ExecuteWorkflowResponse(
             execution_id=uuid4(),
             status="error",
@@ -141,30 +123,26 @@ async def execute_workflow_with_file(
     client_version: Optional[str] = Form(default=None),
     client_platform: Optional[str] = Form(default=None),
 ):
-    """Execute a workflow with a file upload.
-
-    The file is saved to a temp directory and forwarded to the target backend
-    (e.g. service-tools /transcribe). Temp files are cleaned up after processing.
-    """
+    """Execute a workflow with a file upload (e.g. audio for STT)."""
     settings = get_settings()
 
     # Find workflow by slug
     result = await db.execute(select(Workflow).where(Workflow.slug == slug))
-    workflow = result.scalar_one_or_none()
+    wf = result.scalar_one_or_none()
 
-    if not workflow:
+    if not wf:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Workflow '{slug}' not found",
         )
 
-    if not await can_user_access_workflow(db, user, workflow.id):
+    if not await can_user_access_workflow(db, user, wf.id):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="You don't have access to this workflow",
         )
 
-    if not workflow.is_active:
+    if not wf.is_active:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="This workflow is currently inactive",
@@ -181,7 +159,7 @@ async def execute_workflow_with_file(
 
     # Validate file size
     max_size_mb = settings.max_upload_size_mb
-    recipe = workflow.recipe or {}
+    recipe = wf.recipe or {}
     file_config = recipe.get("file_config", {})
     if file_config.get("max_size_mb"):
         max_size_mb = min(max_size_mb, file_config["max_size_mb"])
@@ -206,10 +184,10 @@ async def execute_workflow_with_file(
         with open(temp_path, "wb") as f:
             f.write(file_content)
 
-        # Validate minimum audio size (very short recordings produce invalid containers)
+        # Validate minimum audio size
         actual_content_type = file.content_type or "application/octet-stream"
         actual_filename = file.filename or temp_filename
-        is_audio_workflow = "audio" in (workflow.recipe or {}).get("collect", [])
+        is_audio_workflow = "audio" in (wf.recipe or {}).get("collect", [])
 
         if is_audio_workflow and file_size < 1000:
             raise HTTPException(
@@ -244,23 +222,16 @@ async def execute_workflow_with_file(
         if parsed_input.get("fields"):
             exec_input["fields"] = parsed_input["fields"]
 
-        # Route to executor (same logic as execute_workflow)
-        if workflow.workflow_type:
-            output = await execute_http_workflow(
-                workflow=workflow,
-                input_data=exec_input,
-                db=db,
-                user_id=user.id,
-                client_version=client_version,
-                client_platform=client_platform,
-                file_name=file.filename,
-                file_size_bytes=file_size,
-            )
-        else:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="File upload requires a workflow with workflow_type set",
-            )
+        output = await execute_workflow(
+            workflow=wf,
+            input_data=exec_input,
+            db=db,
+            user_id=user.id,
+            client_version=client_version,
+            client_platform=client_platform,
+            file_name=file.filename,
+            file_size_bytes=file_size,
+        )
 
         result_data = ExecutionResult(
             text=output.get("text"),
@@ -273,7 +244,7 @@ async def execute_workflow_with_file(
         execution_log_id = output.get("execution_log_id")
 
         return ExecuteWorkflowResponse(
-            execution_id=UUID(execution_log_id) if execution_log_id else workflow.id,
+            execution_id=UUID(execution_log_id) if execution_log_id else wf.id,
             status="success",
             result=result_data,
             duration_ms=output.get("duration_ms"),
@@ -293,7 +264,7 @@ async def execute_workflow_with_file(
             ),
             duration_ms=None,
         )
-    except HttpExecutionError as e:
+    except ExecutionError as e:
         return ExecuteWorkflowResponse(
             execution_id=uuid4(),
             status="error",

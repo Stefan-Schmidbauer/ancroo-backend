@@ -1,6 +1,5 @@
 """Admin service layer for workflow CRUD operations."""
 
-import json
 from typing import Any, Optional
 from uuid import UUID
 
@@ -9,7 +8,15 @@ from sqlalchemy import select, func, desc
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from src.db.models import Workflow, ExecutionLog, ToolProvider, WorkflowPermission
+from src.db.models import (
+    Category,
+    ExecutionLog,
+    LLMModel,
+    STTModel,
+    Tool,
+    Workflow,
+    WorkflowPermission,
+)
 
 
 async def list_workflows(db: AsyncSession) -> list[Workflow]:
@@ -17,9 +24,10 @@ async def list_workflows(db: AsyncSession) -> list[Workflow]:
     result = await db.execute(
         select(Workflow)
         .options(
-            selectinload(Workflow.tool_provider),
-            selectinload(Workflow.llm_provider),
-            selectinload(Workflow.stt_provider),
+            selectinload(Workflow.category_rel),
+            selectinload(Workflow.llm_model),
+            selectinload(Workflow.stt_model),
+            selectinload(Workflow.tool),
         )
         .order_by(Workflow.name)
     )
@@ -27,13 +35,14 @@ async def list_workflows(db: AsyncSession) -> list[Workflow]:
 
 
 async def get_workflow(db: AsyncSession, slug: str) -> Optional[Workflow]:
-    """Get a single workflow by slug, with provider relationships loaded."""
+    """Get a single workflow by slug, with relationships loaded."""
     result = await db.execute(
         select(Workflow)
         .options(
-            selectinload(Workflow.tool_provider),
-            selectinload(Workflow.llm_provider),
-            selectinload(Workflow.stt_provider),
+            selectinload(Workflow.category_rel),
+            selectinload(Workflow.llm_model),
+            selectinload(Workflow.stt_model),
+            selectinload(Workflow.tool),
         )
         .where(Workflow.slug == slug)
     )
@@ -58,62 +67,43 @@ async def create_workflow(
     db: AsyncSession,
     name: str,
     description: str = "",
-    category: str = "text",
-    output_type: str = "replace_selection",
-    pipeline_steps: list[dict[str, Any]] | None = None,
-    created_by: Optional[UUID] = None,
-    # New generic fields
-    workflow_type: Optional[str] = None,
+    category_id: Optional[UUID] = None,
+    workflow_type: str = "tool",
     recipe: Optional[dict] = None,
-    target_config: Optional[dict] = None,
     output_action: Optional[str] = None,
     default_hotkey: Optional[str] = None,
-    # Provider assignments
-    llm_provider_id: Optional[UUID] = None,
-    llm_model: Optional[str] = None,
-    stt_provider_id: Optional[UUID] = None,
-    stt_model: Optional[str] = None,
+    created_by: Optional[UUID] = None,
+    # Execution target (exactly one)
+    llm_model_id: Optional[UUID] = None,
+    prompt_template: Optional[str] = None,
+    temperature: Optional[float] = None,
+    stt_model_id: Optional[UUID] = None,
+    tool_id: Optional[UUID] = None,
 ) -> Workflow:
-    """Create a new workflow.
-
-    Supports both legacy pipeline workflows and new generic HTTP workflows.
-    """
+    """Create a new workflow."""
     slug = await _generate_unique_slug(db, name)
-
-    # Derive execution_type from workflow_type
-    if not workflow_type:
-        exec_type = "pipeline"
-    elif workflow_type in ("workflow_trigger", "custom"):
-        exec_type = "tool"
-    else:
-        exec_type = "script"
 
     workflow = Workflow(
         slug=slug,
         name=name,
         description=description,
-        category=category,
-        execution_type=exec_type,
-        output_type=output_type,
-        pipeline_steps=pipeline_steps or [],
-        is_active=True,
-        created_by=created_by,
-        # New generic fields
+        category_id=category_id,
         workflow_type=workflow_type,
         recipe=recipe,
-        target_config=target_config,
         output_action=output_action,
         default_hotkey=default_hotkey,
-        # Provider assignments
-        llm_provider_id=llm_provider_id,
-        llm_model=llm_model,
-        stt_provider_id=stt_provider_id,
-        stt_model=stt_model,
+        is_active=True,
+        created_by=created_by,
+        llm_model_id=llm_model_id,
+        prompt_template=prompt_template,
+        temperature=temperature,
+        stt_model_id=stt_model_id,
+        tool_id=tool_id,
     )
     db.add(workflow)
     await db.flush()
 
-    # Auto-create default permissions so the workflow is visible to all users
+    # Auto-create default permissions
     for group in ["standard-users", "admin-users"]:
         db.add(WorkflowPermission(
             workflow_id=workflow.id,
@@ -130,28 +120,20 @@ async def update_workflow(
     slug: str,
     name: Optional[str] = None,
     description: Optional[str] = None,
-    category: Optional[str] = None,
-    output_type: Optional[str] = None,
-    pipeline_steps: Optional[list[dict[str, Any]]] = None,
-    is_active: Optional[bool] = None,
-    # New generic fields
+    category_id: Any = ...,
     workflow_type: Optional[str] = None,
     recipe: Optional[dict] = None,
-    target_config: Optional[dict] = None,
     output_action: Optional[str] = None,
     default_hotkey: Optional[str] = None,
-    # Provider assignments (use _UNSET sentinel to distinguish None from "not provided")
-    llm_provider_id: Any = ...,
-    llm_model: Any = ...,
-    stt_provider_id: Any = ...,
-    stt_model: Any = ...,
+    is_active: Optional[bool] = None,
+    prompt_template: Optional[str] = None,
+    temperature: Optional[float] = None,
+    # Execution target (use Ellipsis sentinel to distinguish None from "not provided")
+    llm_model_id: Any = ...,
+    stt_model_id: Any = ...,
+    tool_id: Any = ...,
 ) -> Optional[Workflow]:
-    """Update an existing workflow.
-
-    Only provided (non-None) fields are updated.
-    Provider fields use Ellipsis (...) as sentinel to distinguish "not provided"
-    from "set to None" (unassign).
-    """
+    """Update an existing workflow. Only provided (non-None) fields are updated."""
     workflow = await get_workflow(db, slug)
     if not workflow:
         return None
@@ -160,43 +142,35 @@ async def update_workflow(
         workflow.name = name
     if description is not None:
         workflow.description = description
-    if category is not None:
-        workflow.category = category
-    if output_type is not None:
-        workflow.output_type = output_type
-    if pipeline_steps is not None:
-        workflow.pipeline_steps = pipeline_steps
-    if is_active is not None:
-        workflow.is_active = is_active
+    if category_id is not ...:
+        workflow.category_id = category_id
     if workflow_type is not None:
         workflow.workflow_type = workflow_type
     if recipe is not None:
         workflow.recipe = recipe
-    if target_config is not None:
-        workflow.target_config = target_config
     if output_action is not None:
         workflow.output_action = output_action
     if default_hotkey is not None:
         workflow.default_hotkey = default_hotkey
-    if llm_provider_id is not ...:
-        workflow.llm_provider_id = llm_provider_id
-    if llm_model is not ...:
-        workflow.llm_model = llm_model
-    if stt_provider_id is not ...:
-        workflow.stt_provider_id = stt_provider_id
-    if stt_model is not ...:
-        workflow.stt_model = stt_model
+    if is_active is not None:
+        workflow.is_active = is_active
+    if prompt_template is not None:
+        workflow.prompt_template = prompt_template
+    if temperature is not None:
+        workflow.temperature = temperature
+    if llm_model_id is not ...:
+        workflow.llm_model_id = llm_model_id
+    if stt_model_id is not ...:
+        workflow.stt_model_id = stt_model_id
+    if tool_id is not ...:
+        workflow.tool_id = tool_id
 
     await db.flush()
     return workflow
 
 
 async def delete_workflow(db: AsyncSession, slug: str) -> bool:
-    """Delete a workflow by slug.
-
-    Returns:
-        True if deleted, False if not found.
-    """
+    """Delete a workflow by slug."""
     workflow = await get_workflow(db, slug)
     if not workflow:
         return False
@@ -213,13 +187,17 @@ async def get_workflow_stats(db: AsyncSession) -> dict[str, Any]:
         select(func.count(Workflow.id)).where(Workflow.is_active == True)
     )
     executions = await db.execute(select(func.count(ExecutionLog.id)))
-    providers = await db.execute(select(func.count(ToolProvider.id)))
+    llm_models = await db.execute(select(func.count(LLMModel.id)))
+    stt_models = await db.execute(select(func.count(STTModel.id)))
+    tools = await db.execute(select(func.count(Tool.id)))
 
     return {
         "total_workflows": total.scalar() or 0,
         "active_workflows": active.scalar() or 0,
         "total_executions": executions.scalar() or 0,
-        "tool_providers": providers.scalar() or 0,
+        "llm_models": llm_models.scalar() or 0,
+        "stt_models": stt_models.scalar() or 0,
+        "tools": tools.scalar() or 0,
     }
 
 
@@ -234,3 +212,71 @@ async def get_recent_executions(
         .limit(limit)
     )
     return list(result.scalars().all())
+
+
+# --- Category CRUD ---
+
+
+async def list_categories(db: AsyncSession) -> list[Category]:
+    """List all categories ordered by name."""
+    result = await db.execute(select(Category).order_by(Category.name))
+    return list(result.scalars().all())
+
+
+async def get_category(db: AsyncSession, category_id: UUID) -> Optional[Category]:
+    """Get a single category by ID."""
+    result = await db.execute(select(Category).where(Category.id == category_id))
+    return result.scalar_one_or_none()
+
+
+async def get_category_by_name(db: AsyncSession, name: str) -> Optional[Category]:
+    """Get a category by name (case-insensitive)."""
+    result = await db.execute(
+        select(Category).where(func.lower(Category.name) == name.lower())
+    )
+    return result.scalar_one_or_none()
+
+
+async def create_category(db: AsyncSession, name: str, icon: str = "\U0001f527") -> Category:
+    """Create a new category."""
+    category = Category(name=name, icon=icon)
+    db.add(category)
+    await db.flush()
+    return category
+
+
+async def update_category(
+    db: AsyncSession, category_id: UUID, name: Optional[str] = None, icon: Optional[str] = None
+) -> Optional[Category]:
+    """Update a category."""
+    category = await get_category(db, category_id)
+    if not category:
+        return None
+    if name is not None:
+        category.name = name
+    if icon is not None:
+        category.icon = icon
+    await db.flush()
+    return category
+
+
+async def delete_category(db: AsyncSession, category_id: UUID) -> tuple[bool, str]:
+    """Delete a category. Returns (success, message).
+
+    Refuses deletion if workflows are still assigned.
+    """
+    category = await get_category(db, category_id)
+    if not category:
+        return False, "Category not found."
+
+    # Check for assigned workflows
+    count_result = await db.execute(
+        select(func.count(Workflow.id)).where(Workflow.category_id == category_id)
+    )
+    count = count_result.scalar() or 0
+    if count > 0:
+        return False, f"Cannot delete: {count} workflow(s) still assigned to this category."
+
+    await db.delete(category)
+    await db.flush()
+    return True, "Deleted."

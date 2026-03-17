@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+{% block title %}Ancroo Admin - LLM Models{% endblock %}
+
+{% block content %}
+<div class="flex items-center justify-between mb-4">
+    <h1 class="text-lg font-semibold text-gray-900">LLM Models</h1>
+    <a href="/admin/llm-models/new" class="text-sm bg-blue-600 text-white px-3 py-1.5 rounded-lg hover:bg-blue-700 transition">
+        + New Model
+    </a>
+</div>
+
+{% if models %}
+<div class="grid gap-3">
+    {% for model in models %}
+    <a href="/admin/llm-models/{{ model.id }}" class="block bg-white rounded-lg border p-4 hover:border-blue-300 hover:shadow-sm transition">
+        <div class="flex items-center justify-between">
+            <div>
+                <div class="font-medium text-gray-900">{{ model.name }}</div>
+                <div class="text-sm text-gray-500 mt-0.5 font-mono">{{ model.base_url }}</div>
+            </div>
+            <div class="flex items-center gap-3">
+                <span class="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded">{{ model.provider_type }}</span>
+                <span class="text-xs font-mono text-gray-500">{{ model.model_id or 'no model set' }}</span>
+                <span class="text-xs px-2 py-0.5 rounded {{ 'bg-green-100 text-green-700' if model.is_active else 'bg-gray-100 text-gray-500' }}">
+                    {{ 'Active' if model.is_active else 'Inactive' }}
+                </span>
+                {% if model.health_status == 'healthy' %}
+                <span class="w-2 h-2 rounded-full bg-green-500" title="Healthy"></span>
+                {% elif model.health_status == 'unhealthy' %}
+                <span class="w-2 h-2 rounded-full bg-red-500" title="Unhealthy"></span>
+                {% else %}
+                <span class="w-2 h-2 rounded-full bg-gray-300" title="Unknown"></span>
+                {% endif %}
+            </div>
+        </div>
+        {% if model.workflows %}
+        <div class="mt-2 text-xs text-gray-400">
+            {{ model.workflows | length }} workflow{{ 's' if model.workflows | length != 1 }} assigned
+        </div>
+        {% endif %}
+    </a>
+    {% endfor %}
+</div>
+{% else %}
+<div class="text-center py-12 bg-white rounded-lg border">
+    <div class="text-gray-400 text-lg mb-2">No LLM models configured</div>
+    <p class="text-gray-500 text-sm mb-4">Add an Ollama instance or OpenAI-compatible endpoint to power your LLM workflows.</p>
+    <a href="/admin/llm-models/new" class="inline-block bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition text-sm">
+        Add Model
+    </a>
+</div>
+{% endif %}
+{% endblock %}

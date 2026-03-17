@@ -1,6 +1,6 @@
 """Centralized STT transcription endpoint for Ancroo Voice clients.
 
-Accepts audio files and forwards them to the configured default STT provider.
+Accepts audio files and forwards them to the configured default STT model.
 Model and server selection is handled server-side — clients only send audio + language.
 """
 
@@ -15,8 +15,7 @@ from pydantic import BaseModel
 from sqlalchemy import select
 
 from src.config import get_settings
-from src.db.models import STTProvider as STTProviderModel
-from src.integrations.stt_provider import _whisper_build_target
+from src.db.models import STTModel
 from src.utils.audio import NATIVE_AUDIO_TYPES, AudioConversionError, convert_audio_to_wav
 from src.api.v1.dependencies import CurrentUser, DbSession
 
@@ -27,43 +26,43 @@ logger = logging.getLogger(__name__)
 
 class TranscribeResponse(BaseModel):
     text: str
-    provider_name: str
-    model: str
+    model_name: str
+    model_id: str
 
 
-async def _select_stt_provider(db) -> STTProviderModel:
-    """Select the default active STT provider.
+async def _select_stt_model(db) -> STTModel:
+    """Select the default active STT model.
 
-    Falls back to the first active provider if no default is set.
+    Falls back to the first active model if no default is set.
     """
-    # Try default provider first
+    # Try default model first
     result = await db.execute(
-        select(STTProviderModel)
-        .where(STTProviderModel.is_default.is_(True))
-        .where(STTProviderModel.is_active.is_(True))
+        select(STTModel)
+        .where(STTModel.is_default.is_(True))
+        .where(STTModel.is_active.is_(True))
         .limit(1)
     )
-    provider = result.scalar_one_or_none()
+    model = result.scalar_one_or_none()
 
-    if provider is not None:
-        return provider
+    if model is not None:
+        return model
 
-    # Fallback: first active provider
+    # Fallback: first active model
     result = await db.execute(
-        select(STTProviderModel)
-        .where(STTProviderModel.is_active.is_(True))
-        .order_by(STTProviderModel.name)
+        select(STTModel)
+        .where(STTModel.is_active.is_(True))
+        .order_by(STTModel.name)
         .limit(1)
     )
-    provider = result.scalar_one_or_none()
+    model = result.scalar_one_or_none()
 
-    if provider is None:
+    if model is None:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="No active STT provider available. Configure one via /admin/stt-providers.",
+            detail="No active STT model available. Configure one via the admin panel.",
         )
 
-    return provider
+    return model
 
 
 @router.post("/transcribe", response_model=TranscribeResponse)
@@ -73,16 +72,15 @@ async def transcribe(
     file: UploadFile = File(...),
     language: Optional[str] = Form(default=None),
 ):
-    """Transcribe an audio file using the configured default STT provider.
+    """Transcribe an audio file using the configured default STT model.
 
     The backend selects the STT server and model — clients only send audio
     and an optional language hint.
     """
     settings = get_settings()
 
-    # Select STT provider
-    provider = await _select_stt_provider(db)
-    model = provider.default_model
+    # Select STT model
+    stt_model = await _select_stt_model(db)
 
     # Read and validate file
     file_content = await file.read()
@@ -129,18 +127,19 @@ async def transcribe(
                     detail=e.message,
                 )
 
-        # Build target config for the STT server
-        # Language priority: client request > provider default > None (auto-detect)
-        effective_language = language if language else provider.default_language
-        target = _whisper_build_target(
-            base_url=provider.base_url,
-            model=model,
-            language=effective_language or None,
-            timeout=300,
-        )
+        # Build request for STT server
+        url = f"{stt_model.base_url.rstrip('/')}/v1/audio/transcriptions"
+        effective_language = language if language else stt_model.default_language
+        form_data = {"model": stt_model.model_id}
+        if effective_language:
+            form_data["language"] = effective_language
+
+        headers = {}
+        if stt_model.api_key:
+            headers["Authorization"] = f"Bearer {stt_model.api_key}"
 
         # Forward audio to STT server
-        async with httpx.AsyncClient(timeout=float(target["timeout"])) as client:
+        async with httpx.AsyncClient(timeout=300.0) as client:
             with open(actual_path, "rb") as fh:
                 files = {"file": (
                     os.path.basename(actual_path),
@@ -148,15 +147,16 @@ async def transcribe(
                     actual_content_type,
                 )}
                 response = await client.post(
-                    target["url"],
-                    data=target["form_fields"],
+                    url,
+                    data=form_data,
                     files=files,
+                    headers=headers,
                 )
 
         if response.status_code != 200:
             logger.error(
                 "STT server %s returned %d: %s",
-                provider.name, response.status_code, response.text[:500],
+                stt_model.name, response.status_code, response.text[:500],
             )
             raise HTTPException(
                 status_code=status.HTTP_502_BAD_GATEWAY,
@@ -174,14 +174,14 @@ async def transcribe(
 
         return TranscribeResponse(
             text=text,
-            provider_name=provider.name,
-            model=model,
+            model_name=stt_model.name,
+            model_id=stt_model.model_id,
         )
 
     except HTTPException:
         raise
     except httpx.HTTPError as e:
-        logger.error("STT server '%s' connection failed: %s", provider.name, e)
+        logger.error("STT server '%s' connection failed: %s", stt_model.name, e)
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
             detail="Cannot reach STT server. Please check your server configuration.",

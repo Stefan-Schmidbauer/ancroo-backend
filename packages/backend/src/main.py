@@ -16,7 +16,8 @@ from src.config import get_settings
 from src.version import get_version_info
 from src.api.v1.router import api_router
 from src.admin.routes import router as admin_router
-from src.db.session import init_db
+from src.db.session import init_db, AsyncSessionLocal
+from src.integrations.runner import sync_tools_from_runner, RunnerDiscoveryError
 
 # Configure application logging — without this, all src.* loggers are silent
 # because uvicorn only sets up its own loggers, not the root logger.
@@ -45,6 +46,18 @@ async def lifespan(app: FastAPI):
     await init_db()
     os.makedirs(settings.upload_temp_dir, exist_ok=True)
     _cleanup_stale_uploads(settings.upload_temp_dir)
+
+    # Auto-discover AR plugins on startup (non-blocking — runner may not be up yet)
+    try:
+        async with AsyncSessionLocal() as db:
+            report = await sync_tools_from_runner(db, settings.runner_base_url)
+            await db.commit()
+            logger.info("AR tool discovery: %s", report)
+    except RunnerDiscoveryError as e:
+        logger.warning("AR tool discovery skipped — runner not reachable: %s", e.message)
+    except Exception as e:
+        logger.warning("AR tool discovery failed: %s", e)
+
     yield
 
 

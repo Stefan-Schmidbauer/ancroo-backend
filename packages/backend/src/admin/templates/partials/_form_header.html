@@ -13,12 +13,26 @@
         <div id="slug-preview" class="text-xs text-gray-400 mt-1"></div>
         {% endif %}
     </div>
-    <div>
+    <div class="mb-3">
         <label class="block text-sm text-gray-600 mb-1">Description</label>
         <input type="text" name="description"
             value="{{ workflow.description | default('', boolean=True) }}"
             class="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
             placeholder="Short description">
+    </div>
+    <div>
+        <label class="block text-sm text-gray-600 mb-1">Category</label>
+        <select name="category_id" class="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+            <option value="">— No Category —</option>
+            {% for cat in categories %}
+            <option value="{{ cat.id }}" {{ 'selected' if workflow and workflow.category_id == cat.id }}>
+                {{ cat.icon }} {{ cat.name }}
+            </option>
+            {% endfor %}
+        </select>
+        <p class="text-xs text-gray-400 mt-1">
+            Manage categories under <a href="/admin/categories" class="text-blue-500 hover:underline">Categories</a>.
+        </p>
     </div>
 </div>
 {% if not edit_mode %}

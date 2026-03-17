@@ -1,33 +1,33 @@
 {% extends "base.html" %}
-{% block title %}Ancroo Admin - {{ 'Edit ' + provider.name if provider else 'New LLM Provider' }}{% endblock %}
+{% block title %}Ancroo Admin - {{ 'Edit ' + model.name if model else 'New LLM Model' }}{% endblock %}
 
 {% block content %}
 <div class="max-w-3xl">
     <h1 class="text-lg font-semibold text-gray-900 mb-4">
-        {{ 'Edit LLM Provider' if edit_mode else 'New LLM Provider' }}
+        {{ 'Edit LLM Model' if edit_mode else 'New LLM Model' }}
     </h1>
 
-    <form method="post" action="{{ '/admin/llm-providers/' + (provider.id | string) + '/update' if edit_mode else '/admin/llm-providers' }}">
+    <form method="post" action="{{ '/admin/llm-models/' + (model.id | string) + '/update' if edit_mode else '/admin/llm-models' }}">
         <div class="bg-white rounded-lg border p-4 mb-4">
-            <h2 class="text-sm font-semibold text-gray-700 mb-3">Provider</h2>
+            <h2 class="text-sm font-semibold text-gray-700 mb-3">Model</h2>
 
             <div class="mb-3">
                 <label class="block text-sm text-gray-600 mb-1">Type</label>
                 <select name="provider_type" {{ 'disabled' if edit_mode }}
                     class="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
-                    {% set ct = provider.provider_type if provider else 'ollama' %}
+                    {% set ct = model.provider_type if model else 'ollama' %}
                     <option value="ollama" {{ 'selected' if ct == 'ollama' }}>Ollama</option>
-                    <option value="openai_compatible" {{ 'selected' if ct == 'openai_compatible' }}>OpenAI-compatible (LM Studio, vLLM, OpenAI, …)</option>
+                    <option value="openai_compatible" {{ 'selected' if ct == 'openai_compatible' }}>OpenAI-compatible (LM Studio, vLLM, OpenAI, ...)</option>
                 </select>
                 {% if edit_mode %}
-                <input type="hidden" name="provider_type" value="{{ provider.provider_type }}">
+                <input type="hidden" name="provider_type" value="{{ model.provider_type }}">
                 {% endif %}
             </div>
 
             <div class="mb-3">
                 <label class="block text-sm text-gray-600 mb-1">Name</label>
                 <input type="text" name="name" required
-                    value="{{ provider.name if provider else '' }}"
+                    value="{{ model.name if model else '' }}"
                     class="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                     placeholder="e.g. Ollama (local)">
             </div>
@@ -35,40 +35,48 @@
             <div class="mb-3">
                 <label class="block text-sm text-gray-600 mb-1">Base URL</label>
                 <input type="url" name="base_url" required
-                    value="{{ provider.base_url if provider else 'http://ollama:11434' }}"
+                    value="{{ model.base_url if model else 'http://ollama:11434' }}"
                     class="w-full border rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500"
                     placeholder="http://ollama:11434">
                 <p class="text-xs text-gray-400 mt-1">For OpenAI-compatible: base URL without <code>/v1</code>, e.g. <code>http://localhost:1234</code></p>
             </div>
 
             <div class="mb-3">
-                <label class="block text-sm text-gray-600 mb-1">Default Model <span class="text-gray-400">(optional)</span></label>
+                <label class="block text-sm text-gray-600 mb-1">Model ID</label>
                 <div class="flex gap-2">
-                    <select name="default_model" id="default-model-select"
-                        class="flex-1 border rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500">
-                        {% if provider and provider.default_model %}
-                        <option value="">-- no default --</option>
-                        <option value="{{ provider.default_model }}" selected>{{ provider.default_model }}</option>
-                        {% else %}
-                        <option value="" selected>-- no default --</option>
-                        {% endif %}
-                    </select>
+                    <input type="text" name="model_id" required
+                        value="{{ model.model_id if model else '' }}"
+                        class="flex-1 border rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        placeholder="e.g. mistral:7b">
                     <button type="button"
-                        hx-get="/admin/llm-providers/probe-models"
-                        hx-target="#default-model-select"
+                        hx-get="/admin/llm-models/probe-models"
+                        hx-target="#probe-model-list"
                         hx-swap="innerHTML"
                         hx-include="[name='provider_type'],[name='base_url'],[name='api_key']"
+                        hx-on::after-request="document.getElementById('probe-model-list').classList.remove('hidden')"
                         class="text-xs bg-blue-50 text-blue-600 px-3 py-2 rounded-lg hover:bg-blue-100 transition whitespace-nowrap">
                         Load Models <span class="htmx-indicator">...</span>
                     </button>
                 </div>
-                <p class="text-xs text-gray-400 mt-1">Click "Load Models" after entering the Base URL. Used when a workflow has no model override.</p>
+                <select id="probe-model-list" class="mt-1 w-full border rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500 hidden"
+                    onchange="if(this.value) document.querySelector('[name=model_id]').value = this.value">
+                </select>
+                <p class="text-xs text-gray-400 mt-1">The model identifier, e.g. <code>mistral:7b</code> or <code>gpt-4o</code>. Click "Load Models" to discover available models.</p>
+            </div>
+
+            <div class="mb-3">
+                <label class="block text-sm text-gray-600 mb-1">Default Temperature</label>
+                <input type="number" name="default_temperature" step="0.1" min="0" max="2"
+                    value="{{ model.default_temperature if model and model.default_temperature is not none else '0.3' }}"
+                    class="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    placeholder="0.3">
+                <p class="text-xs text-gray-400 mt-1">Default temperature for this model. Can be overridden per workflow.</p>
             </div>
 
             <div class="mb-3">
                 <label class="block text-sm text-gray-600 mb-1">API Key <span class="text-gray-400">(optional)</span></label>
                 <input type="password" name="api_key"
-                    value="{{ provider.api_key if provider and provider.api_key else '' }}"
+                    value="{{ model.api_key if model and model.api_key else '' }}"
                     class="w-full border rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500"
                     placeholder="Required for OpenAI; leave empty for local Ollama">
             </div>
@@ -76,7 +84,7 @@
             {% if edit_mode %}
             <div class="mt-3">
                 <label class="flex items-center gap-2 text-sm text-gray-600">
-                    <input type="checkbox" name="is_active" {{ 'checked' if provider.is_active }}
+                    <input type="checkbox" name="is_active" {{ 'checked' if model.is_active }}
                         class="rounded border-gray-300">
                     Active
                 </label>
@@ -86,9 +94,9 @@
 
         <div class="flex items-center gap-3">
             <button type="submit" class="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 transition text-sm">
-                {{ 'Save Changes' if edit_mode else 'Create Provider' }}
+                {{ 'Save Changes' if edit_mode else 'Create Model' }}
             </button>
-            <a href="{{ '/admin/llm-providers/' + (provider.id | string) if edit_mode and provider else '/admin/llm-providers' }}"
+            <a href="{{ '/admin/llm-models/' + (model.id | string) if edit_mode and model else '/admin/llm-models' }}"
                class="text-sm text-gray-500 hover:text-gray-700">
                 Cancel
             </a>

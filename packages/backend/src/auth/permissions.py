@@ -46,9 +46,10 @@ async def get_accessible_workflows(
 ) -> list[Workflow]:
     """Return workflows accessible to the user."""
     load_opts = [
-        selectinload(Workflow.tool_provider),
-        selectinload(Workflow.llm_provider),
-        selectinload(Workflow.stt_provider),
+        selectinload(Workflow.category_rel),
+        selectinload(Workflow.tool),
+        selectinload(Workflow.llm_model),
+        selectinload(Workflow.stt_model),
     ]
     settings = get_settings()
     if not settings.auth_enabled or user.is_admin:

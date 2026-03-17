@@ -39,6 +39,7 @@ class Settings(BaseSettings):
     whisper_rocm_model: str = "openai/whisper-large-v3-turbo"
     n8n_url: str = "http://n8n:5678"
     n8n_api_key: Optional[str] = None
+    runner_base_url: str = "http://ancroo-runner:8000"
 
     # Workflow settings
     workflow_timeout_seconds: int = 60

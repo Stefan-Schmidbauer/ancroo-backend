@@ -59,27 +59,23 @@ class UserResponse(BaseModel):
 
 
 class WorkflowResponse(BaseModel):
-    """Workflow information response."""
+    """Workflow information response (sent to extension)."""
 
     id: UUID
     slug: str
     name: str
     description: Optional[str]
-    category: Optional[str]
+    category: Optional[str] = None
+    category_icon: Optional[str] = None
     default_hotkey: Optional[str]
-    input_type: str
-    output_type: str
-    execution_type: str = "script"
     version: str
-    provider_name: Optional[str] = None
-    llm_provider_name: Optional[str] = None
-    stt_provider_name: Optional[str] = None
-    sync_status: str = "manual"
-    # New generic fields (public — sent to extension)
-    workflow_type: Optional[str] = None
+    workflow_type: str
     recipe: Optional[dict[str, Any]] = None
     output_action: Optional[str] = None
-    # NOTE: target_config is intentionally NOT included (private, stays on server)
+    # Resolved names for display
+    llm_model_name: Optional[str] = None
+    stt_model_name: Optional[str] = None
+    tool_name: Optional[str] = None
 
     class Config:
         from_attributes = True
@@ -97,6 +93,8 @@ class WorkflowDetailResponse(WorkflowResponse):
     """Detailed workflow response."""
 
     timeout_seconds: int
+    prompt_template: Optional[str] = None
+    temperature: Optional[float] = None
     created_at: datetime
     updated_at: datetime
 
@@ -118,7 +116,6 @@ class ExecuteWorkflowRequest(BaseModel):
     """Request to execute a workflow."""
 
     input_data: ExecutionInput
-    client_script_result: Optional[dict[str, Any]] = None
     client_version: Optional[str] = None
     client_platform: Optional[str] = None
 
@@ -166,20 +163,21 @@ class UpdateHotkeyRequest(BaseModel):
     is_enabled: bool = True
 
 
-# Tool Provider schemas
+# LLM Model schemas
 
 
-class ToolProviderResponse(BaseModel):
-    """Tool provider information response."""
+class LLMModelResponse(BaseModel):
+    """LLM model information response."""
 
     id: UUID
-    provider_type: str
     name: str
+    provider_type: str
     base_url: str
+    model_id: str
+    default_temperature: float
     is_active: bool
     health_status: str = "unknown"
     last_health_check: Optional[datetime] = None
-    config: dict[str, Any] = Field(default_factory=dict)
     created_at: datetime
     updated_at: datetime
 
@@ -187,75 +185,88 @@ class ToolProviderResponse(BaseModel):
         from_attributes = True
 
 
-class ToolProviderListResponse(BaseModel):
-    """List of tool providers."""
+class LLMModelListResponse(BaseModel):
+    """List of LLM models."""
 
-    providers: list[ToolProviderResponse]
+    models: list[LLMModelResponse]
     total: int
 
 
-class CreateToolProviderRequest(BaseModel):
-    """Request to register a new tool provider."""
+# STT Model schemas
 
+
+class STTModelResponse(BaseModel):
+    """STT model information response."""
+
+    id: UUID
+    name: str
     provider_type: str
-    name: str
     base_url: str
-    api_key: Optional[str] = None
-    config: dict[str, Any] = Field(default_factory=dict)
+    model_id: str
+    default_language: Optional[str] = None
+    is_active: bool
+    is_default: bool
+    health_status: str = "unknown"
+    last_health_check: Optional[datetime] = None
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        from_attributes = True
 
 
-class UpdateToolProviderRequest(BaseModel):
-    """Request to update a tool provider."""
+class STTModelListResponse(BaseModel):
+    """List of STT models."""
 
-    name: Optional[str] = None
-    base_url: Optional[str] = None
-    api_key: Optional[str] = None
-    config: Optional[dict[str, Any]] = None
-    is_active: Optional[bool] = None
+    models: list[STTModelResponse]
+    total: int
 
 
-class DiscoveredFlowResponse(BaseModel):
-    """A flow discovered from an external tool provider."""
+# Tool schemas
 
-    id: str
+
+class ToolResponse(BaseModel):
+    """Tool information response."""
+
+    id: UUID
     name: str
-    description: str = ""
-    status: str = "ENABLED"
-    trigger_type: str = ""
-    has_webhook: bool = False
-    already_imported: bool = False
+    tool_type: str
+    endpoint_url: str
+    description: Optional[str] = None
+    is_active: bool
+    health_status: str = "unknown"
+    last_health_check: Optional[datetime] = None
+    source: Optional[str] = None
+    source_id: Optional[str] = None
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        from_attributes = True
 
 
-class DiscoverFlowsResponse(BaseModel):
-    """List of discovered flows from a provider."""
+class ToolListResponse(BaseModel):
+    """List of tools."""
 
-    provider_id: UUID
-    provider_name: str
-    flows: list[DiscoveredFlowResponse]
+    tools: list[ToolResponse]
     total: int
 
 
-class ImportFlowRequest(BaseModel):
-    """Request to import a flow as an Ancroo workflow."""
+class RunnerSyncResponse(BaseModel):
+    """Result of AR plugin discovery sync."""
 
-    flow_id: str
-    flow_name: str
-    category: str = "tool"
-    input_type: str = "text_selection"
-    output_type: str = "clipboard"
-
-
-class SyncResultResponse(BaseModel):
-    """Result of a workflow sync operation."""
-
-    synced: int
+    created: int
     updated: int
-    missing: int
+    unchanged: int
     total: int
+    errors: list[str] = Field(default_factory=list)
+
+
+# System schemas
 
 
 class HealthCheckResponse(BaseModel):
-    """Health check result for a tool provider."""
+    """Health check result."""
 
     healthy: bool
     message: str

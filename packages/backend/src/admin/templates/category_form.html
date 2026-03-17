@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+{% block title %}Ancroo Admin - {{ 'Edit' if edit_mode else 'New' }} Category{% endblock %}
+
+{% block content %}
+<div class="max-w-lg">
+    <div class="flex items-center justify-between mb-4">
+        <h1 class="text-lg font-semibold text-gray-900">{{ 'Edit' if edit_mode else 'New' }} Category</h1>
+        <a href="/admin/categories" class="text-sm text-gray-500 hover:text-gray-700">&larr; Back</a>
+    </div>
+
+    <form method="post" action="{{ '/admin/categories/' ~ category.id ~ '/update' if edit_mode else '/admin/categories' }}">
+        <div class="bg-white rounded-lg border p-4 mb-4">
+            <div class="mb-3">
+                <label class="block text-sm text-gray-600 mb-1">Name</label>
+                <input type="text" name="name" required
+                    value="{{ category.name if category else '' }}"
+                    class="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    placeholder="e.g. text, voice, automation">
+            </div>
+
+            <div>
+                <label class="block text-sm text-gray-600 mb-1">Icon (Emoji)</label>
+                <input type="text" name="icon" required maxlength="10"
+                    value="{{ category.icon if category else '\U0001f527' }}"
+                    class="w-24 border rounded-lg px-3 py-2 text-sm text-center text-2xl focus:outline-none focus:ring-2 focus:ring-blue-500">
+                <p class="text-xs text-gray-400 mt-1">
+                    Paste any emoji — shown in the sidebar and dashboard.
+                </p>
+            </div>
+        </div>
+
+        <div class="flex items-center gap-3">
+            <button type="submit" class="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 transition text-sm">
+                {{ 'Save Changes' if edit_mode else 'Create Category' }}
+            </button>
+            <a href="/admin/categories" class="text-sm text-gray-500 hover:text-gray-700">Cancel</a>
+        </div>
+    </form>
+</div>
+{% endblock %}

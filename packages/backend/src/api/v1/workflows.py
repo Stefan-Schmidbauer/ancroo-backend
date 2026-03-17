@@ -23,51 +23,39 @@ router = APIRouter(prefix="/workflows", tags=["workflows"])
 
 def workflow_to_response(workflow: Workflow) -> WorkflowResponse:
     """Convert workflow model to response schema."""
-    provider_name = None
-    if workflow.execution_type == "tool" and workflow.tool_provider:
-        provider_name = workflow.tool_provider.name
+    llm_model_name = None
+    if workflow.llm_model:
+        llm_model_name = workflow.llm_model.name
 
-    llm_provider_name = None
-    if workflow.llm_provider:
-        llm_provider_name = workflow.llm_provider.name
+    stt_model_name = None
+    if workflow.stt_model:
+        stt_model_name = workflow.stt_model.name
 
-    stt_provider_name = None
-    if workflow.stt_provider:
-        stt_provider_name = workflow.stt_provider.name
+    tool_name = None
+    if workflow.tool:
+        tool_name = workflow.tool.name
 
     return WorkflowResponse(
         id=workflow.id,
         slug=workflow.slug,
         name=workflow.name,
         description=workflow.description,
-        category=workflow.category,
+        category=workflow.category_rel.name if workflow.category_rel else None,
+        category_icon=workflow.category_rel.icon if workflow.category_rel else None,
         default_hotkey=workflow.default_hotkey,
-        input_type=workflow.input_type,
-        output_type=workflow.output_type,
-        execution_type=workflow.execution_type,
         version=workflow.version,
-        provider_name=provider_name,
-        llm_provider_name=llm_provider_name,
-        stt_provider_name=stt_provider_name,
-        sync_status=workflow.sync_status,
-        # New generic fields (public)
         workflow_type=workflow.workflow_type,
         recipe=workflow.recipe,
         output_action=workflow.output_action,
+        llm_model_name=llm_model_name,
+        stt_model_name=stt_model_name,
+        tool_name=tool_name,
     )
 
 
 @router.get("", response_model=WorkflowListResponse)
 async def list_workflows(user: CurrentUser, db: DbSession):
-    """List all workflows the current user can access.
-
-    Args:
-        user: Current authenticated user
-        db: Database session
-
-    Returns:
-        List of accessible workflows
-    """
+    """List all workflows the current user can access."""
     workflows = await get_accessible_workflows(db, user)
 
     return WorkflowListResponse(
@@ -79,23 +67,14 @@ async def list_workflows(user: CurrentUser, db: DbSession):
 
 @router.get("/{slug}", response_model=WorkflowDetailResponse)
 async def get_workflow(slug: str, user: CurrentUser, db: DbSession):
-    """Get detailed information about a specific workflow.
-
-    Args:
-        slug: Workflow slug identifier
-        user: Current authenticated user
-        db: Database session
-
-    Returns:
-        Workflow details
-    """
-    # Find workflow by slug (eager-load providers to avoid lazy-loading in async)
+    """Get detailed information about a specific workflow."""
     result = await db.execute(
         select(Workflow)
         .options(
-            selectinload(Workflow.tool_provider),
-            selectinload(Workflow.llm_provider),
-            selectinload(Workflow.stt_provider),
+            selectinload(Workflow.category_rel),
+            selectinload(Workflow.llm_model),
+            selectinload(Workflow.stt_model),
+            selectinload(Workflow.tool),
         )
         .where(Workflow.slug == slug)
     )
@@ -107,44 +86,34 @@ async def get_workflow(slug: str, user: CurrentUser, db: DbSession):
             detail=f"Workflow '{slug}' not found",
         )
 
-    # Check permission
     if not await can_user_access_workflow(db, user, workflow.id):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="You don't have access to this workflow",
         )
 
-    provider_name = None
-    if workflow.execution_type == "tool" and workflow.tool_provider:
-        provider_name = workflow.tool_provider.name
-
-    llm_provider_name = None
-    if workflow.llm_provider:
-        llm_provider_name = workflow.llm_provider.name
-
-    stt_provider_name = None
-    if workflow.stt_provider:
-        stt_provider_name = workflow.stt_provider.name
+    llm_model_name = workflow.llm_model.name if workflow.llm_model else None
+    stt_model_name = workflow.stt_model.name if workflow.stt_model else None
+    tool_name = workflow.tool.name if workflow.tool else None
 
     return WorkflowDetailResponse(
         id=workflow.id,
         slug=workflow.slug,
         name=workflow.name,
         description=workflow.description,
-        category=workflow.category,
+        category=workflow.category_rel.name if workflow.category_rel else None,
+        category_icon=workflow.category_rel.icon if workflow.category_rel else None,
         default_hotkey=workflow.default_hotkey,
-        input_type=workflow.input_type,
-        output_type=workflow.output_type,
-        execution_type=workflow.execution_type,
         version=workflow.version,
-        provider_name=provider_name,
-        llm_provider_name=llm_provider_name,
-        stt_provider_name=stt_provider_name,
-        sync_status=workflow.sync_status,
         workflow_type=workflow.workflow_type,
         recipe=workflow.recipe,
         output_action=workflow.output_action,
+        llm_model_name=llm_model_name,
+        stt_model_name=stt_model_name,
+        tool_name=tool_name,
         timeout_seconds=workflow.timeout_seconds,
+        prompt_template=workflow.prompt_template,
+        temperature=workflow.temperature,
         created_at=workflow.created_at,
         updated_at=workflow.updated_at,
     )
@@ -156,18 +125,7 @@ async def check_workflow_updates(
     db: DbSession,
     since: Optional[datetime] = None,
 ):
-    """Check for workflow updates since a given timestamp.
-
-    Used by client to sync workflows incrementally.
-
-    Args:
-        user: Current authenticated user
-        db: Database session
-        since: Timestamp to check updates from
-
-    Returns:
-        List of updated workflows
-    """
+    """Check for workflow updates since a given timestamp."""
     workflows = await get_accessible_workflows(db, user)
 
     if since:
@@ -182,18 +140,9 @@ async def check_workflow_updates(
 
 @router.get("/hotkeys/settings", response_model=list[HotkeySettingResponse])
 async def get_hotkey_settings(user: CurrentUser, db: DbSession):
-    """Get user's hotkey settings for all accessible workflows.
-
-    Args:
-        user: Current authenticated user
-        db: Database session
-
-    Returns:
-        List of hotkey settings
-    """
+    """Get user's hotkey settings for all accessible workflows."""
     workflows = await get_accessible_workflows(db, user)
 
-    # Get user's custom hotkey settings
     result = await db.execute(
         select(UserHotkeySetting).where(UserHotkeySetting.user_id == user.id)
     )
@@ -224,17 +173,7 @@ async def update_hotkey_setting(
     user: CurrentUser,
     db: DbSession,
 ):
-    """Update user's hotkey setting for a workflow.
-
-    Args:
-        request: Hotkey update request
-        user: Current authenticated user
-        db: Database session
-
-    Returns:
-        Updated hotkey setting
-    """
-    # Verify workflow exists and user has access
+    """Update user's hotkey setting for a workflow."""
     result = await db.execute(
         select(Workflow).where(Workflow.id == request.workflow_id)
     )
@@ -252,7 +191,6 @@ async def update_hotkey_setting(
             detail="You don't have access to this workflow",
         )
 
-    # Find or create hotkey setting
     result = await db.execute(
         select(UserHotkeySetting).where(
             UserHotkeySetting.user_id == user.id,

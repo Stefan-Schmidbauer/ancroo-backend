@@ -13,12 +13,10 @@
 
         {% if workflow.workflow_type == 'text_transformation' %}
             {% include "partials/workflow_type_text.html" %}
-        {% elif workflow.workflow_type == 'workflow_trigger' %}
-            {% include "partials/workflow_type_trigger.html" %}
-        {% elif workflow.workflow_type == 'custom' %}
-            {% include "partials/workflow_type_custom.html" %}
         {% elif workflow.workflow_type == 'speech_to_text' %}
             {% include "partials/workflow_type_whisper.html" %}
+        {% else %}
+            {% include "partials/workflow_type_tool.html" %}
         {% endif %}
 
         <div class="flex items-center gap-3 mt-2">

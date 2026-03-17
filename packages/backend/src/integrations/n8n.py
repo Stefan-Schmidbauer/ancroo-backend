@@ -1,12 +1,9 @@
 """n8n workflow automation provider.
 
-Implements the ToolProvider protocol for n8n.  Compared to the former
-Activepieces integration this is dramatically simpler because n8n:
-
-- Uses a static API key (no JWT renewal, no email/password login)
-- Has all nodes bundled locally (no piece-sync wait on startup)
-- Offers a clean REST API for workflow CRUD
-- Supports deterministic webhook URLs (http://n8n:5678/webhook/<path>)
+Implements the ToolProvider protocol for n8n:
+- Static API key authentication
+- Clean REST API for workflow CRUD
+- Deterministic webhook URLs (http://n8n:5678/webhook/<path>)
 """
 
 import logging
@@ -15,13 +12,16 @@ from typing import Any
 
 import httpx
 
-from src.integrations.tool_provider import ToolProviderError
-
 logger = logging.getLogger(__name__)
 
 
-class N8nError(ToolProviderError):
+class N8nError(Exception):
     """Error from n8n API operations."""
+
+    def __init__(self, message: str, status_code: int | None = None):
+        self.message = message
+        self.status_code = status_code
+        super().__init__(message)
 
 
 class N8nProvider:
@@ -127,17 +127,21 @@ class N8nProvider:
         self,
         display_name: str,
         webhook_path: str | None = None,
+        custom_workflow_json: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
-        """Create a minimal webhook echo flow in n8n.
+        """Create an n8n webhook flow.
 
-        The flow consists of:
-        1. Webhook trigger node (POST, responds via response node)
-        2. Respond to Webhook node (returns input as JSON)
+        If *custom_workflow_json* is provided (e.g. from an ``n8n-workflow.json``
+        file), it is used as-is (with name and webhook path normalised).
+        Otherwise a minimal echo flow is created as fallback.
 
         Args:
             display_name: Human-readable workflow name.
             webhook_path: URL path for the webhook.  Defaults to a
                 slugified version of *display_name*.
+            custom_workflow_json: Full n8n workflow definition (nodes,
+                connections, settings).  When provided the flow is created
+                from this template instead of the default echo template.
 
         Returns:
             ``{"flow_id": "...", "webhook_url": "..."}``
@@ -145,41 +149,57 @@ class N8nProvider:
         if not webhook_path:
             webhook_path = _slugify(display_name)
 
-        workflow_json = {
-            "name": display_name,
-            "nodes": [
-                {
-                    "parameters": {
-                        "httpMethod": "POST",
-                        "path": webhook_path,
-                        "responseMode": "responseNode",
-                        "options": {},
+        if custom_workflow_json:
+            # Use provided workflow definition, normalise name
+            workflow_json = dict(custom_workflow_json)
+            workflow_json["name"] = display_name
+            # Remove read-only fields that n8n rejects on create
+            workflow_json.pop("tags", None)
+            workflow_json.pop("id", None)
+            # Ensure webhook path matches the slug and strip local IDs
+            for node in workflow_json.get("nodes", []):
+                node.pop("webhookId", None)
+                node.pop("id", None)
+                node_type = node.get("type", "")
+                if "webhook" in node_type.lower() and "respond" not in node_type.lower():
+                    node.setdefault("parameters", {})["path"] = webhook_path
+        else:
+            # Default echo flow
+            workflow_json = {
+                "name": display_name,
+                "nodes": [
+                    {
+                        "parameters": {
+                            "httpMethod": "POST",
+                            "path": webhook_path,
+                            "responseMode": "responseNode",
+                            "options": {},
+                        },
+                        "type": "n8n-nodes-base.webhook",
+                        "typeVersion": 2,
+                        "name": "Webhook",
+                        "position": [250, 300],
                     },
-                    "type": "n8n-nodes-base.webhook",
-                    "typeVersion": 2,
-                    "name": "Webhook",
-                    "position": [250, 300],
-                },
-                {
-                    "parameters": {
-                        "respondWith": "json",
-                        "responseBody": '={{ JSON.stringify({ result: { text: JSON.stringify($input.first().json) } }) }}',
+                    {
+                        "parameters": {
+                            "respondWith": "json",
+                            "responseBody": '={{ JSON.stringify({ result: { text: JSON.stringify($input.first().json) } }) }}',
+                        },
+                        "type": "n8n-nodes-base.respondToWebhook",
+                        "typeVersion": 1,
+                        "name": "Respond to Webhook",
+                        "position": [450, 300],
                     },
-                    "type": "n8n-nodes-base.respondToWebhook",
-                    "typeVersion": 1,
-                    "name": "Respond to Webhook",
-                    "position": [450, 300],
+                ],
+                "connections": {
+                    "Webhook": {
+                        "main": [
+                            [{"node": "Respond to Webhook", "type": "main", "index": 0}]
+                        ]
+                    }
                 },
-            ],
-            "connections": {
-                "Webhook": {
-                    "main": [
-                        [{"node": "Respond to Webhook", "type": "main", "index": 0}]
-                    ]
-                }
-            },
-            "settings": {"executionOrder": "v1"},
-        }
+                "settings": {"executionOrder": "v1"},
+            }
 
         async with httpx.AsyncClient(timeout=30.0) as client:
             resp = await client.post(
