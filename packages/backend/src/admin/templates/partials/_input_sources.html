@@ -13,41 +13,16 @@
     <h2 class="text-sm font-semibold text-gray-700 mb-3">Input</h2>
 
     <div class="mb-3">
-        <label class="block text-sm text-gray-600 mb-2">Data Source</label>
-        <div class="flex flex-wrap gap-3">
-            <label class="flex items-center gap-1.5 text-sm text-gray-700">
-                <input type="radio" name="input_source_radio" value="text_selection" class="border-gray-300" onchange="updateSource()"
-                    {{ 'checked' if _selected == 'text_selection' else '' }}>
-                Text Selection
-            </label>
-            <label class="flex items-center gap-1.5 text-sm text-gray-700">
-                <input type="radio" name="input_source_radio" value="clipboard" class="border-gray-300" onchange="updateSource()"
-                    {{ 'checked' if _selected == 'clipboard' else '' }}>
-                Clipboard
-            </label>
-            <label class="flex items-center gap-1.5 text-sm text-gray-700">
-                <input type="radio" name="input_source_radio" value="form_fields" class="border-gray-300" onchange="updateSource()" id="rb-form-fields"
-                    {{ 'checked' if _selected == 'form_fields' else '' }}>
-                Form Fields
-            </label>
-            <label class="flex items-center gap-1.5 text-sm text-gray-700">
-                <input type="radio" name="input_source_radio" value="page_context" class="border-gray-300" onchange="updateSource()"
-                    {{ 'checked' if _selected == 'page_context' else '' }}>
-                Page Context
-            </label>
-            <label class="flex items-center gap-1.5 text-sm text-gray-700">
-                <input type="radio" name="input_source_radio" value="page_html" class="border-gray-300" onchange="updateSource()"
-                    {{ 'checked' if _selected == 'page_html' else '' }}>
-                Page HTML
-            </label>
-            <label class="flex items-center gap-1.5 text-sm text-gray-700">
-                <input type="radio" name="input_source_radio" value="manual_input" class="border-gray-300" onchange="updateSource()"
-                    {{ 'checked' if _selected == 'manual_input' else '' }}>
-                Manual Input
-            </label>
-        </div>
-        <input type="hidden" name="input_sources" id="input-sources"
-            value="{{ _selected }}">
+        <label class="block text-sm text-gray-600 mb-1">Data Source</label>
+        <select name="input_sources" id="input-sources" onchange="updateSource()"
+            class="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+            <option value="text_selection" {{ 'selected' if _selected == 'text_selection' }}>Text Selection</option>
+            <option value="clipboard" {{ 'selected' if _selected == 'clipboard' }}>Clipboard</option>
+            <option value="form_fields" {{ 'selected' if _selected == 'form_fields' }}>Form Fields</option>
+            <option value="page_context" {{ 'selected' if _selected == 'page_context' }}>Page Context</option>
+            <option value="page_html" {{ 'selected' if _selected == 'page_html' }}>Page HTML</option>
+            <option value="manual_input" {{ 'selected' if _selected == 'manual_input' }}>Manual Input</option>
+        </select>
     </div>
 
     <!-- Form Fields editor (visible when Form Fields is selected) -->
@@ -66,8 +41,7 @@
     let formFields = {{ _ff | tojson }};
 
     function updateSource() {
-        const selected = document.querySelector('input[name="input_source_radio"]:checked');
-        document.getElementById('input-sources').value = selected ? selected.value : '';
+        const selected = document.getElementById('input-sources');
         const ffSection = document.getElementById('form-fields-section');
         ffSection.classList.toggle('hidden', !selected || selected.value !== 'form_fields');
     }

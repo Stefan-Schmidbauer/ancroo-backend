@@ -3,21 +3,26 @@
 
 {% block content %}
 <div class="max-w-3xl">
-    <!-- Header -->
-    <div class="flex items-center justify-between mb-4">
-        <div>
-            <h1 class="text-lg font-semibold text-gray-900">{{ model.name }}</h1>
-            <p class="text-sm text-gray-500 mt-0.5 font-mono">{{ model.base_url }}</p>
-        </div>
-        <div class="flex items-center gap-2">
-            <span class="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded">{{ model.provider_type }}</span>
-            <span class="text-xs px-2 py-0.5 rounded {{ 'bg-green-100 text-green-700' if model.is_active else 'bg-gray-100 text-gray-500' }}">
-                {{ 'Active' if model.is_active else 'Inactive' }}
-            </span>
+    <!-- Identity -->
+    <div class="bg-white rounded-lg border p-4 mb-4">
+        <div class="flex items-center justify-between">
+            <div>
+                <h1 class="text-lg font-semibold text-gray-900">{{ model.name }}</h1>
+                <p class="text-sm text-gray-500 mt-0.5 font-mono">{{ model.model_id }}</p>
+            </div>
+            <div class="flex items-center gap-2">
+                <span class="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded">{{ model.provider_type }}</span>
+                {% if model.is_default %}
+                <span class="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded">Default</span>
+                {% endif %}
+                <span class="text-xs px-2 py-0.5 rounded {{ 'bg-green-100 text-green-700' if model.is_active else 'bg-gray-100 text-gray-500' }}">
+                    {{ 'Active' if model.is_active else 'Inactive' }}
+                </span>
+            </div>
         </div>
     </div>
 
-    <!-- Health Check -->
+    <!-- Connection -->
     <div class="bg-white rounded-lg border p-4 mb-4">
         <div class="flex items-center justify-between mb-2">
             <h2 class="text-sm font-semibold text-gray-700">Connection</h2>
@@ -27,7 +32,7 @@
                 Check Now <span class="htmx-indicator">...</span>
             </button>
         </div>
-        <div id="health-result">
+        <div id="health-result" class="mb-3">
             <div class="flex items-center gap-2">
                 {% if model.health_status == 'healthy' %}
                 <span class="w-2.5 h-2.5 rounded-full bg-green-500"></span>
@@ -37,42 +42,29 @@
                 <span class="text-sm text-red-700">Unhealthy</span>
                 {% else %}
                 <span class="w-2.5 h-2.5 rounded-full bg-gray-300"></span>
-                <span class="text-sm text-gray-500">Unknown -- click "Check Now"</span>
+                <span class="text-sm text-gray-500">Unknown — click "Check Now"</span>
                 {% endif %}
                 {% if model.last_health_check %}
                 <span class="text-xs text-gray-400 ml-auto">Last: {{ model.last_health_check.strftime('%Y-%m-%d %H:%M') }}</span>
                 {% endif %}
             </div>
         </div>
-    </div>
-
-    <!-- Available Models -->
-    <div class="bg-white rounded-lg border p-4 mb-4">
-        <div class="flex items-center justify-between mb-2">
-            <h2 class="text-sm font-semibold text-gray-700">Available Models</h2>
-            <button hx-get="/admin/stt-models/{{ model.id }}/discover-models"
-                    hx-target="#model-list" hx-swap="innerHTML"
-                    class="text-xs bg-blue-50 text-blue-600 px-2 py-1 rounded hover:bg-blue-100 transition">
-                Load Models <span class="htmx-indicator">...</span>
-            </button>
-        </div>
-        <div id="model-list">
-            <p class="text-sm text-gray-400 text-center py-2">Click "Load Models" to fetch the list from {{ model.name }}.</p>
-        </div>
-    </div>
-
-    <!-- Details -->
-    <div class="bg-white rounded-lg border p-4 mb-4">
-        <h2 class="text-sm font-semibold text-gray-700 mb-2">Details</h2>
-        <dl class="grid grid-cols-2 gap-2 text-sm">
-            <dt class="text-gray-500">Model ID</dt>
-            <dd class="text-gray-900 font-mono">{{ model.model_id }}</dd>
-            <dt class="text-gray-500">Default Language</dt>
-            <dd class="text-gray-900 font-mono">{{ model.default_language or 'Auto-detect' }}</dd>
+        <dl class="grid grid-cols-[8rem_1fr] gap-x-3 gap-y-2 text-sm">
+            <dt class="text-gray-500">Base URL</dt>
+            <dd class="text-gray-900 font-mono text-xs">{{ model.base_url }}</dd>
             <dt class="text-gray-500">API Key</dt>
             <dd class="text-gray-900">{{ '... configured' if model.api_key else 'Not set' }}</dd>
+        </dl>
+    </div>
+
+    <!-- Model Settings -->
+    <div class="bg-white rounded-lg border p-4 mb-4">
+        <h2 class="text-sm font-semibold text-gray-700 mb-2">Model Settings</h2>
+        <dl class="grid grid-cols-[8rem_1fr] gap-x-3 gap-y-2 text-sm">
+            <dt class="text-gray-500">Language</dt>
+            <dd class="text-gray-900 font-mono">{{ model.default_language or 'Auto-detect' }}</dd>
             <dt class="text-gray-500">Created</dt>
-            <dd class="text-gray-900">{{ model.created_at.strftime('%Y-%m-%d %H:%M') if model.created_at else '—' }}</dd>
+            <dd class="text-gray-900 text-xs">{{ model.created_at.strftime('%Y-%m-%d %H:%M') if model.created_at else '—' }}</dd>
         </dl>
     </div>
 
@@ -85,7 +77,9 @@
             <a href="/admin/workflows/{{ wf.slug }}"
                class="flex items-center justify-between py-1.5 px-2 text-sm hover:bg-gray-50 rounded {{ 'border-t' if not loop.first }}">
                 <span class="text-gray-900">{{ wf.name }}</span>
-                <span class="text-xs font-mono text-gray-400">{{ model.model_id }}</span>
+                <span class="text-xs px-1.5 py-0.5 rounded {{ 'bg-green-100 text-green-700' if wf.is_active else 'bg-gray-100 text-gray-500' }}">
+                    {{ 'active' if wf.is_active else 'inactive' }}
+                </span>
             </a>
             {% endfor %}
         </div>

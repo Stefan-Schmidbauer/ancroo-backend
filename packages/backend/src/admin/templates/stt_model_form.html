@@ -8,10 +8,20 @@
     </h1>
 
     <form method="post" action="{{ '/admin/stt-models/' + (model.id | string) + '/update' if edit_mode else '/admin/stt-models' }}">
+
+        <!-- Identity -->
         <div class="bg-white rounded-lg border p-4 mb-4">
-            <h2 class="text-sm font-semibold text-gray-700 mb-3">Model</h2>
+            <h2 class="text-sm font-semibold text-gray-700 mb-3">Identity</h2>
 
             <div class="mb-3">
+                <label class="block text-sm text-gray-600 mb-1">Name</label>
+                <input type="text" name="name" required
+                    value="{{ model.name if model else '' }}"
+                    class="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    placeholder="e.g. Speaches (CPU) or Whisper-ROCm (GPU)">
+            </div>
+
+            <div>
                 <label class="block text-sm text-gray-600 mb-1">Type</label>
                 <select name="provider_type" {{ 'disabled' if edit_mode }}
                     class="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
@@ -22,14 +32,11 @@
                 <input type="hidden" name="provider_type" value="{{ model.provider_type }}">
                 {% endif %}
             </div>
+        </div>
 
-            <div class="mb-3">
-                <label class="block text-sm text-gray-600 mb-1">Name</label>
-                <input type="text" name="name" required
-                    value="{{ model.name if model else '' }}"
-                    class="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    placeholder="e.g. Speaches (CPU) or Whisper-ROCm (GPU)">
-            </div>
+        <!-- Connection -->
+        <div class="bg-white rounded-lg border p-4 mb-4">
+            <h2 class="text-sm font-semibold text-gray-700 mb-3">Connection</h2>
 
             <div class="mb-3">
                 <label class="block text-sm text-gray-600 mb-1">Base URL</label>
@@ -40,6 +47,19 @@
                 <p class="text-xs text-gray-400 mt-1">OpenAI-compatible Whisper endpoint, e.g. <code>http://speaches:8000</code> or <code>http://whisper-rocm:8000</code></p>
             </div>
 
+            <div>
+                <label class="block text-sm text-gray-600 mb-1">API Key <span class="text-gray-400">(optional)</span></label>
+                <input type="password" name="api_key"
+                    value="{{ model.api_key if model and model.api_key else '' }}"
+                    class="w-full border rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    placeholder="Leave empty for local services">
+            </div>
+        </div>
+
+        <!-- Model -->
+        <div class="bg-white rounded-lg border p-4 mb-4">
+            <h2 class="text-sm font-semibold text-gray-700 mb-3">Model</h2>
+
             <div class="mb-3">
                 <label class="block text-sm text-gray-600 mb-1">Model ID</label>
                 <input type="text" name="model_id" required
@@ -49,7 +69,7 @@
                 <p class="text-xs text-gray-400 mt-1">The model identifier used for transcription requests.</p>
             </div>
 
-            <div class="mb-3">
+            <div>
                 <label class="block text-sm text-gray-600 mb-1">Default Language <span class="text-gray-400">(optional)</span></label>
                 <input type="text" name="default_language"
                     value="{{ model.default_language if model and model.default_language else '' }}"
@@ -57,26 +77,23 @@
                     placeholder="de / en / fr ...">
                 <p class="text-xs text-gray-400 mt-1">ISO 639-1 language code. Ensures Whisper transcribes instead of translating. Leave empty for auto-detection.</p>
             </div>
+        </div>
 
-            <div class="mb-3">
-                <label class="block text-sm text-gray-600 mb-1">API Key <span class="text-gray-400">(optional)</span></label>
-                <input type="password" name="api_key"
-                    value="{{ model.api_key if model and model.api_key else '' }}"
-                    class="w-full border rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    placeholder="Leave empty for local services">
-            </div>
+        <!-- Settings -->
+        <div class="bg-white rounded-lg border p-4 mb-4">
+            <h2 class="text-sm font-semibold text-gray-700 mb-3">Settings</h2>
 
             <div class="mb-3">
                 <label class="flex items-center gap-2 text-sm text-gray-600">
                     <input type="checkbox" name="is_default" {{ 'checked' if model and model.is_default }}
                         class="rounded border-gray-300">
-                    Is Default
+                    Default STT Model
                 </label>
                 <p class="text-xs text-gray-400 mt-1">Mark this as the default STT model for new workflows.</p>
             </div>
 
             {% if edit_mode %}
-            <div class="mt-3">
+            <div>
                 <label class="flex items-center gap-2 text-sm text-gray-600">
                     <input type="checkbox" name="is_active" {{ 'checked' if model.is_active }}
                         class="rounded border-gray-300">

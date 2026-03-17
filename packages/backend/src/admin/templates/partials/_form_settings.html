@@ -1,0 +1,50 @@
+<!-- Shared partial: workflow settings card (category, active, hotkey, timeout).
+     Context vars (from parent):
+       workflow   – Workflow model or None (new mode)
+       categories – list of Category models
+       edit_mode  – boolean -->
+<div class="bg-white rounded-lg border p-4 mb-4">
+    <h2 class="text-sm font-semibold text-gray-700 mb-3">Settings</h2>
+
+    <div class="grid grid-cols-2 gap-3 mb-3">
+        <div>
+            <label class="block text-sm text-gray-600 mb-1">Category</label>
+            <select name="category_id" class="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+                <option value="">— No Category —</option>
+                {% for cat in categories %}
+                <option value="{{ cat.id }}" {{ 'selected' if workflow and workflow.category_id == cat.id }}>
+                    {{ cat.icon }} {{ cat.name }}
+                </option>
+                {% endfor %}
+            </select>
+            <p class="text-xs text-gray-400 mt-1">
+                Manage categories under <a href="/admin/categories" class="text-blue-500 hover:underline">Categories</a>.
+            </p>
+        </div>
+        <div>
+            <label class="block text-sm text-gray-600 mb-1">Hotkey (optional)</label>
+            <input type="text" name="default_hotkey"
+                value="{{ workflow.default_hotkey | default('', boolean=True) }}"
+                class="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                placeholder="e.g. ctrl+shift+g">
+        </div>
+    </div>
+
+    <div class="grid grid-cols-2 gap-3">
+        <div>
+            <label class="block text-sm text-gray-600 mb-1">Timeout (seconds)</label>
+            <input type="number" name="timeout_seconds" min="1" max="600"
+                value="{{ workflow.timeout_seconds | default(60) }}"
+                class="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+            <p class="text-xs text-gray-400 mt-1">Max execution time before the workflow is cancelled.</p>
+        </div>
+        {% if edit_mode %}
+        <div class="flex items-end pb-2">
+            <label class="flex items-center gap-2 text-sm text-gray-600">
+                <input type="checkbox" name="is_active" {{ 'checked' if workflow and workflow.is_active else '' }} class="rounded border-gray-300">
+                Active
+            </label>
+        </div>
+        {% endif %}
+    </div>
+</div>

@@ -1,6 +1,7 @@
 <!-- Tool: select an existing tool (n8n webhook, AR plugin, custom API) -->
 {% set name_placeholder = "e.g. Freight Calculator" %}
 {% include 'partials/_form_header.html' %}
+{% include 'partials/_form_settings.html' %}
 
 {% set default_collect = 'form_fields' %}
 {% include 'partials/_input_sources.html' %}
@@ -33,38 +34,20 @@
 
     {% set _action = workflow.output_action | default('notification', boolean=True) %}
 
-    <div class="grid grid-cols-2 gap-3">
-        <div>
-            <label class="block text-sm text-gray-600 mb-1">Action</label>
-            <select name="output_action" class="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
-                <option value="replace_selection" {{ 'selected' if _action == 'replace_selection' }}>Replace Selection</option>
-                <option value="insert_before" {{ 'selected' if _action == 'insert_before' }}>Insert Before Selection</option>
-                <option value="insert_after" {{ 'selected' if _action == 'insert_after' }}>Insert After Selection</option>
-                <option value="clipboard" {{ 'selected' if _action == 'clipboard' }}>Copy to Clipboard</option>
-                <option value="fill_fields" {{ 'selected' if _action == 'fill_fields' }}>Fill Fields</option>
-                <option value="side_panel_only" {{ 'selected' if _action == 'side_panel_only' }}>Show in Side Panel</option>
-                <option value="download_file" {{ 'selected' if _action == 'download_file' }}>Download as File</option>
-                <option value="notification" {{ 'selected' if _action in ('notification', 'show_notification') }}>Notification</option>
-                <option value="none" {{ 'selected' if _action == 'none' }}>None</option>
-            </select>
-        </div>
-        <div>
-            <label class="block text-sm text-gray-600 mb-1">Hotkey (optional)</label>
-            <input type="text" name="default_hotkey"
-                value="{{ workflow.default_hotkey | default('', boolean=True) }}"
-                class="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                placeholder="e.g. ctrl+shift+e">
-        </div>
+    <div>
+        <label class="block text-sm text-gray-600 mb-1">Output Action</label>
+        <select name="output_action" class="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+            <option value="replace_selection" {{ 'selected' if _action == 'replace_selection' }}>Replace Selection</option>
+            <option value="insert_before" {{ 'selected' if _action == 'insert_before' }}>Insert Before Selection</option>
+            <option value="insert_after" {{ 'selected' if _action == 'insert_after' }}>Insert After Selection</option>
+            <option value="clipboard" {{ 'selected' if _action == 'clipboard' }}>Copy to Clipboard</option>
+            <option value="fill_fields" {{ 'selected' if _action == 'fill_fields' }}>Fill Fields</option>
+            <option value="side_panel_only" {{ 'selected' if _action == 'side_panel_only' }}>Show in Side Panel</option>
+            <option value="download_file" {{ 'selected' if _action == 'download_file' }}>Download as File</option>
+            <option value="notification" {{ 'selected' if _action in ('notification', 'show_notification') }}>Notification</option>
+            <option value="none" {{ 'selected' if _action == 'none' }}>None</option>
+        </select>
     </div>
 
     {% include 'partials/_output_fields_editor.html' %}
-
-    {% if edit_mode %}
-    <div class="mt-3">
-        <label class="flex items-center gap-2 text-sm text-gray-600">
-            <input type="checkbox" name="is_active" {{ 'checked' if workflow and workflow.is_active else '' }} class="rounded border-gray-300">
-            Active
-        </label>
-    </div>
-    {% endif %}
 </div>

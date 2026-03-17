@@ -3,51 +3,67 @@
 
 {% block content %}
 <div class="max-w-3xl">
-    <!-- Header -->
-    <div class="flex items-center justify-between mb-4">
-        <div>
-            <h1 class="text-lg font-semibold text-gray-900">{{ workflow.category_rel.icon if workflow.category_rel else '🔧' }} {{ workflow.name }}</h1>
-            {% if workflow.description %}
-            <p class="text-sm text-gray-500 mt-0.5">{{ workflow.description }}</p>
-            {% endif %}
-        </div>
-        <div class="flex items-center gap-2">
-            {% if workflow.demo_url %}
-            <a href="/admin/workflows/{{ workflow.slug }}/demo" target="_blank"
-               class="text-xs bg-blue-50 text-blue-600 px-2 py-0.5 rounded hover:bg-blue-100 transition">Demo Page</a>
-            {% endif %}
-            {% include "partials/toggle_active.html" %}
-            {% if workflow.category_rel %}
-            <span class="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded">{{ workflow.category_rel.name }}</span>
-            {% endif %}
+    <!-- Identity -->
+    <div class="bg-white rounded-lg border p-4 mb-4">
+        <div class="flex items-center justify-between">
+            <div>
+                <h1 class="text-lg font-semibold text-gray-900">{{ workflow.category_rel.icon if workflow.category_rel else '🔧' }} {{ workflow.name }}</h1>
+                {% if workflow.description %}
+                <p class="text-sm text-gray-500 mt-0.5">{{ workflow.description }}</p>
+                {% endif %}
+            </div>
+            <div class="flex items-center gap-2">
+                {% if workflow.demo_url %}
+                <a href="/admin/workflows/{{ workflow.slug }}/demo" target="_blank"
+                   class="text-xs bg-blue-50 text-blue-600 px-2 py-0.5 rounded hover:bg-blue-100 transition">Demo Page</a>
+                {% endif %}
+                {% include "partials/toggle_active.html" %}
+            </div>
         </div>
     </div>
 
-    <!-- Tool info (for tool-based workflows) -->
-    {% if workflow.tool %}
+    <!-- Settings -->
     <div class="bg-white rounded-lg border p-4 mb-4">
-        <h2 class="text-sm font-semibold text-gray-700 mb-2">Tool</h2>
-        <div class="flex items-center gap-3 p-2 bg-purple-50 rounded-lg">
-            <div class="flex-1">
-                <a href="/admin/tools/{{ workflow.tool.id }}" class="text-sm font-medium text-purple-600 hover:underline">
-                    {{ workflow.tool.name }}
-                </a>
-                <span class="text-xs text-gray-500 ml-2">{{ workflow.tool.tool_type | replace('_', ' ') }}</span>
-            </div>
-            <div class="text-right">
-                <div class="text-xs text-gray-500">Endpoint</div>
-                <div class="text-xs font-mono text-gray-600 max-w-xs truncate">
-                    {{ workflow.tool.endpoint_url or '(not provisioned)' }}
-                </div>
-            </div>
-        </div>
+        <h2 class="text-sm font-semibold text-gray-700 mb-2">Settings</h2>
+        <dl class="grid grid-cols-[8rem_1fr] gap-x-3 gap-y-2 text-sm">
+            <dt class="text-gray-500">Category</dt>
+            <dd class="text-gray-900">
+                {% if workflow.category_rel %}
+                {{ workflow.category_rel.icon }} {{ workflow.category_rel.name }}
+                {% else %}
+                <span class="text-gray-400">—</span>
+                {% endif %}
+            </dd>
+            <dt class="text-gray-500">Hotkey</dt>
+            <dd class="text-gray-900 font-mono text-xs">{{ workflow.default_hotkey or '—' }}</dd>
+            <dt class="text-gray-500">Timeout</dt>
+            <dd class="text-gray-900">{{ workflow.timeout_seconds }}s</dd>
+        </dl>
+    </div>
+
+    <!-- Input -->
+    {% if workflow.recipe and workflow.recipe.collect %}
+    <div class="bg-white rounded-lg border p-4 mb-4">
+        <h2 class="text-sm font-semibold text-gray-700 mb-2">Input</h2>
+        <dl class="grid grid-cols-[8rem_1fr] gap-x-3 gap-y-2 text-sm">
+            <dt class="text-gray-500">Data Source</dt>
+            <dd class="text-gray-900">{{ workflow.recipe.collect | join(', ') | replace('_', ' ') | title }}</dd>
+            {% if workflow.recipe.form_fields %}
+            <dt class="text-gray-500">Form Fields</dt>
+            <dd class="text-gray-900">
+                {% for f in workflow.recipe.form_fields %}
+                <span class="inline-block bg-gray-100 text-xs px-1.5 py-0.5 rounded mr-1">{{ f.name }}</span>
+                {% endfor %}
+            </dd>
+            {% endif %}
+        </dl>
     </div>
     {% endif %}
 
-    <!-- LLM Model info (read-only) -->
+    <!-- Processing: LLM Model -->
     {% if workflow.llm_model %}
     <div class="bg-white rounded-lg border p-4 mb-4">
-        <h2 class="text-sm font-semibold text-gray-700 mb-2">LLM Model</h2>
+        <h2 class="text-sm font-semibold text-gray-700 mb-2">Text Transformation</h2>
         <div class="flex items-center gap-3 p-2 bg-blue-50 rounded-lg">
             <div class="flex-1">
                 <a href="/admin/llm-models/{{ workflow.llm_model.id }}" class="text-sm font-medium text-blue-600 hover:underline">
@@ -76,7 +92,7 @@
     </div>
     {% endif %}
 
-    <!-- STT Model info (read-only) -->
+    <!-- Processing: STT Model -->
     {% if workflow.stt_model %}
     <div class="bg-white rounded-lg border p-4 mb-4">
         <h2 class="text-sm font-semibold text-gray-700 mb-2">STT Model</h2>
@@ -97,42 +113,66 @@
     </div>
     {% endif %}
 
-    <!-- Info -->
+    <!-- Processing: Tool -->
+    {% if workflow.tool %}
     <div class="bg-white rounded-lg border p-4 mb-4">
-        <h2 class="text-sm font-semibold text-gray-700 mb-2">Details</h2>
-        <dl class="grid grid-cols-2 gap-2 text-sm">
-            <dt class="text-gray-500">Slug</dt>
-            <dd class="text-gray-900 font-mono text-xs">{{ workflow.slug }}</dd>
-            <dt class="text-gray-500">Workflow Type</dt>
-            <dd class="text-gray-900">
-                {{ workflow.workflow_type }}
-                {% if workflow.tool %}
-                <span class="text-xs text-purple-600">(via {{ workflow.tool.name }})</span>
-                {% endif %}
-            </dd>
+        <h2 class="text-sm font-semibold text-gray-700 mb-2">Tool</h2>
+        <div class="flex items-center gap-3 p-2 bg-purple-50 rounded-lg">
+            <div class="flex-1">
+                <a href="/admin/tools/{{ workflow.tool.id }}" class="text-sm font-medium text-purple-600 hover:underline">
+                    {{ workflow.tool.name }}
+                </a>
+                <span class="text-xs text-gray-500 ml-2">{{ workflow.tool.tool_type | replace('_', ' ') }}</span>
+            </div>
+            <div class="text-right">
+                <div class="text-xs text-gray-500">Endpoint</div>
+                <div class="text-xs font-mono text-gray-600 max-w-xs truncate">
+                    {{ workflow.tool.endpoint_url or '(not provisioned)' }}
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Output -->
+    <div class="bg-white rounded-lg border p-4 mb-4">
+        <h2 class="text-sm font-semibold text-gray-700 mb-2">Output</h2>
+        <dl class="grid grid-cols-[8rem_1fr] gap-x-3 gap-y-2 text-sm">
             <dt class="text-gray-500">Output Action</dt>
-            <dd class="text-gray-900">{{ workflow.output_action or '—' }}</dd>
-            <dt class="text-gray-500">Timeout</dt>
-            <dd class="text-gray-900">{{ workflow.timeout_seconds }}s</dd>
+            <dd class="text-gray-900">{{ (workflow.output_action or '—') | replace('_', ' ') | title }}</dd>
+            {% if workflow.recipe and workflow.recipe.output_fields %}
+            <dt class="text-gray-500">Output Fields</dt>
+            <dd class="text-gray-900">
+                {% for f in workflow.recipe.output_fields %}
+                <span class="inline-block bg-gray-100 text-xs px-1.5 py-0.5 rounded mr-1">{{ f.name }}</span>
+                {% endfor %}
+            </dd>
+            {% endif %}
         </dl>
     </div>
 
-    <!-- Test Panel -->
-    {% if workflow.is_active %}
-    <div class="bg-white rounded-lg border p-4 mb-4">
-        <h2 class="text-sm font-semibold text-gray-700 mb-3">Test</h2>
-        <form hx-post="/admin/workflows/{{ workflow.slug }}/test" hx-target="#test-result" hx-swap="innerHTML">
-            <textarea name="test_input" rows="3"
-                class="w-full border rounded-lg px-3 py-2 text-sm mb-2 font-mono focus:outline-none focus:ring-2 focus:ring-blue-500"
-                placeholder="{{ 'Enter text to transform...' if workflow.workflow_type == 'text_transformation' else 'Enter test input...' }}"></textarea>
-            <button type="submit" class="bg-green-600 text-white px-4 py-1.5 rounded-lg hover:bg-green-700 transition text-sm">
-                Run Test
-                <span class="htmx-indicator">...</span>
-            </button>
-        </form>
-        <div id="test-result" class="mt-3"></div>
-    </div>
-    {% endif %}
+    <!-- Technical Details (collapsed) -->
+    <details class="bg-white rounded-lg border mb-4">
+        <summary class="p-4 text-sm font-semibold text-gray-700 cursor-pointer hover:bg-gray-50 transition">
+            Technical Details
+        </summary>
+        <div class="px-4 pb-4">
+            <dl class="grid grid-cols-[8rem_1fr] gap-x-3 gap-y-2 text-sm">
+                <dt class="text-gray-500">Slug</dt>
+                <dd class="text-gray-900 font-mono text-xs">{{ workflow.slug }}</dd>
+                <dt class="text-gray-500">Workflow Type</dt>
+                <dd class="text-gray-900">
+                    {{ workflow.workflow_type | replace('_', ' ') | title }}
+                </dd>
+                <dt class="text-gray-500">Version</dt>
+                <dd class="text-gray-900">{{ workflow.version }}</dd>
+                <dt class="text-gray-500">Created</dt>
+                <dd class="text-gray-900 text-xs">{{ workflow.created_at.strftime('%Y-%m-%d %H:%M') if workflow.created_at else '—' }}</dd>
+                <dt class="text-gray-500">Updated</dt>
+                <dd class="text-gray-900 text-xs">{{ workflow.updated_at.strftime('%Y-%m-%d %H:%M') if workflow.updated_at else '—' }}</dd>
+            </dl>
+        </div>
+    </details>
 
     <!-- Recent Executions -->
     {% if executions %}

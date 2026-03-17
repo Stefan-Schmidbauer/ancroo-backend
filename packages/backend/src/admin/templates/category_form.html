@@ -20,11 +20,22 @@
 
             <div>
                 <label class="block text-sm text-gray-600 mb-1">Icon (Emoji)</label>
-                <input type="text" name="icon" required maxlength="10"
-                    value="{{ category.icon if category else '\U0001f527' }}"
-                    class="w-24 border rounded-lg px-3 py-2 text-sm text-center text-2xl focus:outline-none focus:ring-2 focus:ring-blue-500">
-                <p class="text-xs text-gray-400 mt-1">
-                    Paste any emoji — shown in the sidebar and dashboard.
+                <div class="flex items-center gap-3 mb-2">
+                    <input type="text" name="icon" id="icon-input" required maxlength="10"
+                        value="{{ category.icon if category else '\U0001f527' }}"
+                        class="w-24 border rounded-lg px-3 py-2 text-sm text-center text-2xl focus:outline-none focus:ring-2 focus:ring-blue-500">
+                </div>
+                <div class="flex flex-wrap gap-1.5">
+                    {% for emoji in ['📝', '🔧', '🎙️', '🔊', '🤖', '📊', '📁', '🌐', '🔒', '📧', '📷', '🎨', '⚡', '💬', '📅', '🔍', '📦', '🧮', '🧹', '💡'] %}
+                    <button type="button"
+                        class="w-9 h-9 text-xl rounded-lg border border-gray-200 hover:border-blue-400 hover:bg-blue-50 transition cursor-pointer flex items-center justify-center"
+                        onclick="document.getElementById('icon-input').value='{{ emoji }}'">
+                        {{ emoji }}
+                    </button>
+                    {% endfor %}
+                </div>
+                <p class="text-xs text-gray-400 mt-1.5">
+                    Pick a suggestion or paste any emoji.
                 </p>
             </div>
         </div>
