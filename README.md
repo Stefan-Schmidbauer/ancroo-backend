@@ -105,7 +105,7 @@ To add more workflows, use the admin UI at `<server-url>/admin/workflows/new`
 or import a `metadata.json` file:
 
 ```bash
-curl -X POST http://localhost:8900/admin/api/import-workflow \
+curl -X POST http://localhost:8900/admin/api/import \
   -H "Content-Type: application/json" \
   -d @workflow.json
 ```

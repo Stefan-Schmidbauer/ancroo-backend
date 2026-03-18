@@ -160,27 +160,40 @@ Transcribe an audio file using the default STT provider. Does not require a work
 
 ## Admin API
 
-### Workflow Import
+### Import / Export
 
-#### `POST /admin/api/import-workflow`
+#### `POST /admin/api/import`
 
-Import a workflow from a metadata JSON object. Idempotent — re-importing an existing slug returns `already_exists`.
+Import any entity from a JSON body. Accepts all `_type` values: `llm_model`, `stt_model`, `tool`, `category`, `workflow`, `bundle`. Idempotent — re-importing an existing entity is skipped.
 
-**Request:**
+**Request (single entity):**
 ```json
 {
+  "_type": "workflow",
+  "_version": 1,
   "slug": "grammar-fix",
   "name": "Grammar Fix",
   "workflow_type": "text_transformation",
-  "description": "...",
-  "category": "text",
-  "input_sources": ["text_selection"],
+  "category_name": "text",
+  "llm_model_name": "Ollama-ROCm (GPU)",
   "output_action": "replace_selection",
-  "requires": ["llm"],
-  "llm_prompt": "Fix the grammar of the following text:\n\n{{ text }}",
-  "llm_temperature": 0.3
+  "recipe": {"collect": ["text_selection"]},
+  "prompt_template": "Fix the grammar:\n\n{{ text }}",
+  "temperature": 0.3
 }
 ```
+
+#### `GET /admin/api/export/all`
+
+Export all entities as a JSON bundle. API keys are excluded.
+
+#### `GET /admin/api/export/workflow/{slug}`
+#### `GET /admin/api/export/llm-model/{id}`
+#### `GET /admin/api/export/stt-model/{id}`
+#### `GET /admin/api/export/tool/{id}`
+#### `GET /admin/api/export/category/{id}`
+
+Export a single entity as JSON download.
 
 ### LLM Providers
 
