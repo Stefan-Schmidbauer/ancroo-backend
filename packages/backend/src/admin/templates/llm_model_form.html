@@ -89,7 +89,7 @@
             <div class="mb-3">
                 <label class="block text-sm text-gray-600 mb-1">Model ID</label>
                 <div class="flex gap-2">
-                    <input type="text" name="model_id" required
+                    <input type="text" name="{{ 'model_id_field' if edit_mode else 'model_id' }}" required
                         value="{{ model.model_id if model else '' }}"
                         class="flex-1 border rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500"
                         placeholder="e.g. mistral:7b">
@@ -104,7 +104,7 @@
                     </button>
                 </div>
                 <select id="probe-model-list" class="mt-1 w-full border rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500 hidden"
-                    onchange="if(this.value) document.querySelector('[name=model_id]').value = this.value">
+                    onchange="if(this.value) document.querySelector('[name={{ 'model_id_field' if edit_mode else 'model_id' }}]').value = this.value">
                 </select>
                 <p class="text-xs text-gray-400 mt-1">The model identifier, e.g. <code>mistral:7b</code>, <code>claude-sonnet-4-20250514</code>, or <code>gpt-4o</code>. Click "Load Models" to discover available models.</p>
             </div>

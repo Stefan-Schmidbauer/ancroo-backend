@@ -51,7 +51,6 @@ Ancroo Backend runs **AI workflows** that the browser extension triggers. You se
 | Speech to Text       | Transcribes audio using the configured STT provider (Speaches or Whisper) | Whisper STT   |
 | Contact Form Capture | Captures form fields and triggers an n8n automation workflow              | n8n           |
 | Name Formatter       | Extracts name fields from a page and triggers an n8n automation workflow  | n8n           |
-| n8n Echo             | Sends selected text to n8n and echoes it back (integration test)          | n8n           |
 
 GPU variant workflows are provided so you can match the grammar workflow to your hardware. For speech-to-text, configure the appropriate STT provider (Speaches for CUDA, Whisper-ROCm for AMD) in the admin UI — a single workflow covers all setups.
 

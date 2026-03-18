@@ -381,10 +381,19 @@ async def _provision_n8n_flow(
 
 _CATEGORY_ICONS = {
     "text": "\u270F\uFE0F",
-    "voice": "\uD83C\uDF99\uFE0F",
+    "voice": "\U0001F399\uFE0F",
     "automation": "\u26A1",
-    "translation": "\uD83C\uDF10",
-    "code": "\uD83D\uDCBB",
+    "translation": "\U0001F524",
+    "code": "\U0001F4BB",
+    "image": "\U0001F5BC\uFE0F",
+    "search": "\U0001F50D",
+    "data": "\U0001F4CA",
+    "email": "\U0001F4E7",
+    "chat": "\U0001F4AC",
+    "summary": "\U0001F4DD",
+    "security": "\U0001F512",
+    "media": "\U0001F3AC",
+    "file": "\U0001F4C1",
 }
 
 
@@ -496,28 +505,42 @@ async def import_workflow(session: AsyncSession, meta: dict) -> ImportResult:
         )
 
     # --- Resolve execution target ---
+    #
+    # Auto-detect from workflow_type when 'requires' is not set.
+    # The metadata format uses workflow_type + tool.tool_type to signal
+    # the execution target; 'requires' is an optional explicit override.
 
     llm_model = None
     stt_model = None
     tool = None
+    wf_type = meta.get("workflow_type")
+    tool_meta = meta.get("tool")
 
-    if "llm" in requires:
+    needs_llm = "llm" in requires or wf_type == "text_transformation"
+    needs_stt = "whisper" in requires or wf_type == "speech_to_text"
+    needs_n8n = "n8n" in requires or (
+        tool_meta is not None and tool_meta.get("tool_type") == "n8n_webhook"
+    )
+
+    if needs_llm:
         llm_model = await _resolve_llm_model(session, backend)
 
-    if "whisper" in requires:
+    if needs_stt:
         stt_model = await _resolve_stt_model(session, backend)
 
-    if "n8n" in requires:
-        flow_name = meta.get("n8n_workflow_name", name)
+    if needs_n8n:
+        flow_name = (
+            tool_meta.get("n8n_workflow_name", name) if tool_meta
+            else meta.get("n8n_workflow_name", name)
+        )
         tool = await _ensure_n8n_tool(session, slug, flow_name)
 
     if meta.get("target_config") and not tool:
         # Custom workflows with direct target_config (e.g. AR plugin endpoints)
         tool = await _ensure_custom_tool(session, slug, meta["target_config"])
 
-    if meta.get("tool") and not tool:
+    if tool_meta and not tool:
         # Tool block format (AR plugins, custom APIs) — map to target_config
-        tool_meta = meta["tool"]
         target_config = {
             "url": tool_meta.get("endpoint_url", ""),
             "method": tool_meta.get("http_method", "POST"),
@@ -551,8 +574,8 @@ async def import_workflow(session: AsyncSession, meta: dict) -> ImportResult:
         timeout_seconds=meta.get("timeout_seconds", 60),
         # Execution target (exactly one)
         llm_model_id=llm_model.id if llm_model else None,
-        prompt_template=meta.get("llm_prompt") if llm_model else None,
-        temperature=meta.get("llm_temperature") if llm_model else None,
+        prompt_template=meta.get("prompt_template") if llm_model else None,
+        temperature=meta.get("temperature") if llm_model else None,
         stt_model_id=stt_model.id if stt_model else None,
         tool_id=tool.id if tool else None,
     )
@@ -570,7 +593,7 @@ async def import_workflow(session: AsyncSession, meta: dict) -> ImportResult:
 
     # --- n8n provisioning (best-effort) ---
 
-    if "n8n" in requires and tool:
+    if needs_n8n and tool:
         n8n_ready = await _check_n8n_ready()
         if n8n_ready:
             success = await _provision_n8n_flow(session, workflow, tool, meta)

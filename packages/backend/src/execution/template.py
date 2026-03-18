@@ -21,9 +21,9 @@ def render_payload(template_str: str, input_data: dict[str, Any]) -> str:
     env = SandboxedEnvironment()
     template = env.from_string(template_str)
 
-    text = input_data.get("text", "")
-    html = input_data.get("html", "")
-    clipboard = input_data.get("clipboard", "")
+    text = input_data.get("text") or ""
+    html = input_data.get("html") or ""
+    clipboard = input_data.get("clipboard") or ""
     context = input_data.get("context", {})
 
     variables = {
@@ -52,10 +52,10 @@ def render_prompt(template_str: str, input_data: dict[str, Any]) -> str:
     context = input_data.get("context", {})
 
     variables = {
-        "text": input_data.get("text", ""),
-        "html": input_data.get("html", ""),
-        "clipboard": input_data.get("clipboard", ""),
-        "fields": input_data.get("fields", {}),
+        "text": input_data.get("text") or "",
+        "html": input_data.get("html") or "",
+        "clipboard": input_data.get("clipboard") or "",
+        "fields": input_data.get("fields") or {},
         "context": context,
         "url": context.get("url", ""),
         "title": context.get("title", ""),
