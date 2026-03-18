@@ -100,6 +100,10 @@
             class="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition text-sm">
             Edit Provider
         </a>
+        <a href="/admin/api/export/tool/{{ tool.id }}" download
+           class="text-sm text-gray-600 hover:text-gray-800 border border-gray-300 px-4 py-2 rounded-lg hover:bg-gray-50 transition">
+            Export JSON
+        </a>
         {% if linked_workflows %}
         <span class="text-sm text-gray-400 px-4 py-2 cursor-not-allowed" title="Cannot delete: used by {{ linked_workflows|length }} workflow(s)">
             Delete

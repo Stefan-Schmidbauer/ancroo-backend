@@ -1,13 +1,13 @@
 {% extends "base.html" %}
-{% block title %}Ancroo Admin - {{ 'Edit ' + provider.name if provider else 'New Tool Provider' }}{% endblock %}
+{% block title %}Ancroo Admin - {{ 'Edit ' + tool.name if tool else 'New Tool' }}{% endblock %}
 
 {% block content %}
 <div class="max-w-3xl">
     <h1 class="text-lg font-semibold text-gray-900 mb-4">
-        {{ 'Edit Provider' if edit_mode else 'Register Tool Provider' }}
+        {{ 'Edit Tool' if edit_mode else 'New Tool' }}
     </h1>
 
-    <form method="post" action="{{ '/admin/tools/' + (provider.id | string) + '/update' if edit_mode else '/admin/tools' }}">
+    <form method="post" action="{{ '/admin/tools/' + (tool.id | string) + '/update' if edit_mode else '/admin/tools' }}">
 
         <!-- Identity -->
         <div class="bg-white rounded-lg border p-4 mb-4">
@@ -16,21 +16,29 @@
             <div class="mb-3">
                 <label class="block text-sm text-gray-600 mb-1">Name</label>
                 <input type="text" name="name" required
-                    value="{{ provider.name if provider else '' }}"
+                    value="{{ tool.name if tool else '' }}"
                     class="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    placeholder="e.g. n8n Production">
+                    placeholder="e.g. HTML to Markdown">
             </div>
 
-            <div>
-                <label class="block text-sm text-gray-600 mb-1">Provider Type</label>
-                <select name="provider_type" {{ 'disabled' if edit_mode }} class="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
-                    {% set current_type = provider.provider_type if provider else 'n8n' %}
-                    <option value="n8n" {{ 'selected' if current_type == 'n8n' }}>n8n</option>
+            <div class="mb-3">
+                <label class="block text-sm text-gray-600 mb-1">Tool Type</label>
+                <select name="tool_type" {{ 'disabled' if edit_mode }} class="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    {% set current_type = tool.tool_type if tool else 'n8n_webhook' %}
+                    <option value="ar_plugin" {{ 'selected' if current_type == 'ar_plugin' }}>AR Plugin</option>
+                    <option value="n8n_webhook" {{ 'selected' if current_type == 'n8n_webhook' }}>n8n Webhook</option>
                     <option value="custom_api" {{ 'selected' if current_type == 'custom_api' }}>Custom API</option>
                 </select>
                 {% if edit_mode %}
-                <input type="hidden" name="provider_type" value="{{ provider.provider_type }}">
+                <input type="hidden" name="tool_type" value="{{ tool.tool_type }}">
                 {% endif %}
+            </div>
+
+            <div>
+                <label class="block text-sm text-gray-600 mb-1">Description</label>
+                <textarea name="description" rows="2"
+                    class="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    placeholder="What does this tool do?">{{ tool.description if tool and tool.description else '' }}</textarea>
             </div>
         </div>
 
@@ -39,19 +47,100 @@
             <h2 class="text-sm font-semibold text-gray-700 mb-3">Connection</h2>
 
             <div class="mb-3">
-                <label class="block text-sm text-gray-600 mb-1">Base URL</label>
-                <input type="url" name="base_url" required
-                    value="{{ provider.base_url if provider else 'http://n8n:5678' }}"
+                <label class="block text-sm text-gray-600 mb-1">Endpoint URL</label>
+                <input type="url" name="endpoint_url"
+                    value="{{ tool.endpoint_url if tool and tool.endpoint_url else '' }}"
+                    class="w-full border rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    placeholder="http://ancroo-runner:8000/convert/html-to-markdown">
+            </div>
+
+            <div class="mb-3">
+                <label class="block text-sm text-gray-600 mb-1">HTTP Method</label>
+                <select name="http_method" class="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    {% set current_method = tool.http_method if tool else 'POST' %}
+                    <option value="POST" {{ 'selected' if current_method == 'POST' }}>POST</option>
+                    <option value="GET" {{ 'selected' if current_method == 'GET' }}>GET</option>
+                    <option value="PUT" {{ 'selected' if current_method == 'PUT' }}>PUT</option>
+                    <option value="PATCH" {{ 'selected' if current_method == 'PATCH' }}>PATCH</option>
+                    <option value="DELETE" {{ 'selected' if current_method == 'DELETE' }}>DELETE</option>
+                </select>
+            </div>
+
+            <div class="mb-3">
+                <label class="block text-sm text-gray-600 mb-1">Timeout (seconds)</label>
+                <input type="number" name="timeout" min="1" max="600"
+                    value="{{ tool.timeout if tool else 120 }}"
+                    class="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+            </div>
+
+            <div>
+                <label class="block text-sm text-gray-600 mb-1">Headers <span class="text-gray-400">(JSON or Key: Value per line)</span></label>
+                <textarea name="headers" rows="3"
+                    class="w-full border rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    placeholder='{"Content-Type": "application/json"}'>{{ tool.headers | tojson(indent=2) if tool and tool.headers else '' }}</textarea>
+            </div>
+        </div>
+
+        <!-- n8n Settings -->
+        <div class="bg-white rounded-lg border p-4 mb-4">
+            <h2 class="text-sm font-semibold text-gray-700 mb-3">n8n Settings <span class="text-gray-400 font-normal">(only for n8n tools)</span></h2>
+
+            <div class="mb-3">
+                <label class="block text-sm text-gray-600 mb-1">n8n Base URL</label>
+                <input type="url" name="n8n_base_url"
+                    value="{{ tool.n8n_base_url if tool and tool.n8n_base_url else '' }}"
                     class="w-full border rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500"
                     placeholder="http://n8n:5678">
             </div>
 
-            <div>
-                <label class="block text-sm text-gray-600 mb-1">API Key</label>
-                <input type="password" name="api_key"
-                    value="{{ provider.api_key if provider and provider.api_key else '' }}"
+            <div class="mb-3">
+                <label class="block text-sm text-gray-600 mb-1">n8n API Key</label>
+                <input type="password" name="n8n_api_key"
+                    value=""
                     class="w-full border rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    placeholder="Bearer token for API access">
+                    placeholder="{{ '*** configured — leave empty to keep' if tool and tool.n8n_api_key else 'API key for n8n' }}">
+            </div>
+
+            <div>
+                <label class="block text-sm text-gray-600 mb-1">n8n Flow ID</label>
+                <input type="text" name="n8n_flow_id"
+                    value="{{ tool.n8n_flow_id if tool and tool.n8n_flow_id else '' }}"
+                    class="w-full border rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    placeholder="Workflow ID in n8n">
+            </div>
+        </div>
+
+        <!-- Advanced -->
+        <div class="bg-white rounded-lg border p-4 mb-4">
+            <h2 class="text-sm font-semibold text-gray-700 mb-3">Advanced</h2>
+
+            <div class="mb-3">
+                <label class="block text-sm text-gray-600 mb-1">Payload Template <span class="text-gray-400">(Jinja2)</span></label>
+                <textarea name="payload_template" rows="4"
+                    class="w-full border rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    placeholder='{"text": "{{ text }}", "url": "{{ url }}"}'>{{ tool.payload_template if tool and tool.payload_template else '' }}</textarea>
+            </div>
+
+            <div class="mb-3">
+                <label class="block text-sm text-gray-600 mb-1">Response Mapping <span class="text-gray-400">(JSONPath)</span></label>
+                <input type="text" name="response_mapping"
+                    value="{{ tool.response_mapping if tool and tool.response_mapping else '' }}"
+                    class="w-full border rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    placeholder="$.result">
+            </div>
+
+            <div class="mb-3">
+                <label class="block text-sm text-gray-600 mb-1">Input Schema <span class="text-gray-400">(JSON)</span></label>
+                <textarea name="input_schema" rows="3"
+                    class="w-full border rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    placeholder='{"type": "object", "properties": {...}}'>{{ tool.input_schema | tojson(indent=2) if tool and tool.input_schema else '' }}</textarea>
+            </div>
+
+            <div>
+                <label class="block text-sm text-gray-600 mb-1">Output Schema <span class="text-gray-400">(JSON)</span></label>
+                <textarea name="output_schema" rows="3"
+                    class="w-full border rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    placeholder='{"type": "object", "properties": {...}}'>{{ tool.output_schema | tojson(indent=2) if tool and tool.output_schema else '' }}</textarea>
             </div>
         </div>
 
@@ -60,7 +149,7 @@
         <div class="bg-white rounded-lg border p-4 mb-4">
             <h2 class="text-sm font-semibold text-gray-700 mb-3">Settings</h2>
             <label class="flex items-center gap-2 text-sm text-gray-600">
-                <input type="checkbox" name="is_active" {{ 'checked' if provider.is_active }}
+                <input type="checkbox" name="is_active" {{ 'checked' if tool.is_active }}
                     class="rounded border-gray-300">
                 Active
             </label>
@@ -69,9 +158,9 @@
 
         <div class="flex items-center gap-3">
             <button type="submit" class="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 transition text-sm">
-                {{ 'Save Changes' if edit_mode else 'Register Provider' }}
+                {{ 'Save Changes' if edit_mode else 'Create Tool' }}
             </button>
-            <a href="{{ '/admin/tools/' + (provider.id | string) if edit_mode and provider else '/admin/tools' }}" class="text-sm text-gray-500 hover:text-gray-700">
+            <a href="{{ '/admin/tools/' + (tool.id | string) if edit_mode and tool else '/admin/tools' }}" class="text-sm text-gray-500 hover:text-gray-700">
                 Cancel
             </a>
         </div>
