@@ -8,7 +8,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, File, Form, Query, Request, HTTPException, UploadFile
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import selectinload
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -51,6 +51,12 @@ _FLASH_MESSAGES = {
 def _flash_context(request: Request) -> dict:
     """Extract flash message from query params for template context."""
     key = request.query_params.get("flash", "")
+    if key == "in_use":
+        count = request.query_params.get("count", "?")
+        return {
+            "flash_message": f"Cannot delete: still used by {count} workflow(s). Remove or reassign them first.",
+            "flash_type": "error",
+        }
     msg, msg_type = _FLASH_MESSAGES.get(key, (None, None))
     if msg:
         return {"flash_message": msg, "flash_type": msg_type}
@@ -478,6 +484,18 @@ async def delete_workflow(slug: str, db: DbSession):
     return RedirectResponse("/admin/?flash=deleted", status_code=303)
 
 
+# --- Duplicate Workflow ---
+
+@router.post("/workflows/{slug}/duplicate")
+async def duplicate_workflow(slug: str, db: DbSession):
+    """Duplicate a workflow."""
+    copy = await service.duplicate_workflow(db, slug)
+    if not copy:
+        raise HTTPException(status_code=404, detail="Workflow not found")
+    await db.commit()
+    return RedirectResponse(f"/admin/workflows/{copy.slug}?flash=created", status_code=303)
+
+
 # --- Toggle Active (HTMX) ---
 
 @router.post("/workflows/{slug}/toggle-active", response_class=HTMLResponse)
@@ -724,9 +742,33 @@ async def delete_tool(tool_id: UUID, db: DbSession):
     if not tool:
         raise HTTPException(status_code=404, detail="Tool not found")
 
+    count = (await db.execute(
+        select(func.count()).select_from(Workflow).where(Workflow.tool_id == tool_id)
+    )).scalar_one()
+    if count:
+        return RedirectResponse(
+            f"/admin/tools/{tool_id}?flash=in_use&count={count}", status_code=303
+        )
+
     await db.delete(tool)
     await db.commit()
     return RedirectResponse("/admin/tools?flash=deleted", status_code=303)
+
+
+@router.post("/tools/{tool_id}/toggle-active", response_class=HTMLResponse)
+async def toggle_tool_active(request: Request, tool_id: UUID, db: DbSession):
+    """HTMX: Toggle tool is_active and return updated toggle button."""
+    tool = await db.get(Tool, tool_id)
+    if not tool:
+        raise HTTPException(status_code=404, detail="Tool not found")
+
+    tool.is_active = not tool.is_active
+    await db.commit()
+
+    return templates.TemplateResponse("partials/toggle_active_tool.html", {
+        "request": request,
+        "tool": tool,
+    })
 
 
 @router.post("/tools/{tool_id}/health-check", response_class=HTMLResponse)
@@ -976,9 +1018,44 @@ async def delete_llm_model(model_id: UUID, db: DbSession):
     llm_model = await db.get(LLMModel, model_id)
     if not llm_model:
         raise HTTPException(status_code=404, detail="LLM model not found")
+
+    count = (await db.execute(
+        select(func.count()).select_from(Workflow).where(Workflow.llm_model_id == model_id)
+    )).scalar_one()
+    if count:
+        return RedirectResponse(
+            f"/admin/llm-models/{model_id}?flash=in_use&count={count}", status_code=303
+        )
+
     await db.delete(llm_model)
     await db.commit()
     return RedirectResponse("/admin/llm-models?flash=deleted", status_code=303)
+
+
+@router.post("/llm-models/{model_id}/duplicate")
+async def duplicate_llm_model(model_id: UUID, db: DbSession):
+    """Duplicate an LLM model."""
+    copy = await service.duplicate_llm_model(db, model_id)
+    if not copy:
+        raise HTTPException(status_code=404, detail="LLM model not found")
+    await db.commit()
+    return RedirectResponse(f"/admin/llm-models/{copy.id}?flash=created", status_code=303)
+
+
+@router.post("/llm-models/{model_id}/toggle-active", response_class=HTMLResponse)
+async def toggle_llm_model_active(request: Request, model_id: UUID, db: DbSession):
+    """HTMX: Toggle LLM model is_active and return updated toggle button."""
+    llm_model = await db.get(LLMModel, model_id)
+    if not llm_model:
+        raise HTTPException(status_code=404, detail="LLM model not found")
+
+    llm_model.is_active = not llm_model.is_active
+    await db.commit()
+
+    return templates.TemplateResponse("partials/toggle_active_llm.html", {
+        "request": request,
+        "model": llm_model,
+    })
 
 
 @router.post("/llm-models/{model_id}/health-check", response_class=HTMLResponse)
@@ -1171,9 +1248,34 @@ async def delete_stt_model(model_id: UUID, db: DbSession):
     stt_model = await db.get(STTModel, model_id)
     if not stt_model:
         raise HTTPException(status_code=404, detail="STT model not found")
+
+    count = (await db.execute(
+        select(func.count()).select_from(Workflow).where(Workflow.stt_model_id == model_id)
+    )).scalar_one()
+    if count:
+        return RedirectResponse(
+            f"/admin/stt-models/{model_id}?flash=in_use&count={count}", status_code=303
+        )
+
     await db.delete(stt_model)
     await db.commit()
     return RedirectResponse("/admin/stt-models?flash=deleted", status_code=303)
+
+
+@router.post("/stt-models/{model_id}/toggle-active", response_class=HTMLResponse)
+async def toggle_stt_model_active(request: Request, model_id: UUID, db: DbSession):
+    """HTMX: Toggle STT model is_active and return updated toggle button."""
+    stt_model = await db.get(STTModel, model_id)
+    if not stt_model:
+        raise HTTPException(status_code=404, detail="STT model not found")
+
+    stt_model.is_active = not stt_model.is_active
+    await db.commit()
+
+    return templates.TemplateResponse("partials/toggle_active_stt.html", {
+        "request": request,
+        "model": stt_model,
+    })
 
 
 @router.post("/stt-models/{model_id}/health-check", response_class=HTMLResponse)

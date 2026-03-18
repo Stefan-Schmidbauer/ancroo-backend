@@ -174,6 +174,72 @@ async def update_workflow(
     return workflow
 
 
+async def duplicate_workflow(db: AsyncSession, slug: str) -> Optional[Workflow]:
+    """Duplicate a workflow with a new name and slug."""
+    source = await get_workflow(db, slug)
+    if not source:
+        return None
+
+    new_name = f"{source.name} (Copy)"
+    new_slug = await _generate_unique_slug(db, new_name)
+
+    copy = Workflow(
+        slug=new_slug,
+        name=new_name,
+        description=source.description,
+        category_id=source.category_id,
+        workflow_type=source.workflow_type,
+        recipe=source.recipe,
+        output_action=source.output_action,
+        default_hotkey=None,  # Don't copy hotkey — must be unique
+        timeout_seconds=source.timeout_seconds,
+        is_active=False,  # Start inactive so admin can review
+        created_by=source.created_by,
+        llm_model_id=source.llm_model_id,
+        prompt_template=source.prompt_template,
+        temperature=source.temperature,
+        stt_model_id=source.stt_model_id,
+        tool_id=source.tool_id,
+    )
+    db.add(copy)
+    await db.flush()
+
+    # Copy default permissions
+    for group in ["standard-users", "admin-users"]:
+        db.add(WorkflowPermission(
+            workflow_id=copy.id,
+            group_name=group,
+            permission_level="execute",
+        ))
+    await db.flush()
+
+    return copy
+
+
+async def duplicate_llm_model(db: AsyncSession, model_id: UUID) -> Optional[LLMModel]:
+    """Duplicate an LLM model with a new name."""
+    source = await db.get(LLMModel, model_id)
+    if not source:
+        return None
+
+    copy = LLMModel(
+        name=f"{source.name} (Copy)",
+        provider_type=source.provider_type,
+        base_url=source.base_url,
+        endpoint_execute=source.endpoint_execute,
+        endpoint_models=source.endpoint_models,
+        api_key=source.api_key,  # Already encrypted
+        model_id=source.model_id,
+        default_temperature=source.default_temperature,
+        config=source.config,
+        is_active=False,  # Start inactive so admin can review
+    )
+    db.add(copy)
+    await db.flush()
+
+    return copy
+
+
 async def delete_workflow(db: AsyncSession, slug: str) -> bool:
     """Delete a workflow by slug."""
     workflow = await get_workflow(db, slug)
