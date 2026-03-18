@@ -1242,6 +1242,16 @@ async def update_stt_model(
     return RedirectResponse(f"/admin/stt-models/{model_id}?flash=updated", status_code=303)
 
 
+@router.post("/stt-models/{model_id}/duplicate")
+async def duplicate_stt_model(model_id: UUID, db: DbSession):
+    """Duplicate an STT model."""
+    copy = await service.duplicate_stt_model(db, model_id)
+    if not copy:
+        raise HTTPException(status_code=404, detail="STT model not found")
+    await db.commit()
+    return RedirectResponse(f"/admin/stt-models/{copy.id}?flash=created", status_code=303)
+
+
 @router.post("/stt-models/{model_id}/delete")
 async def delete_stt_model(model_id: UUID, db: DbSession):
     """Delete an STT model."""

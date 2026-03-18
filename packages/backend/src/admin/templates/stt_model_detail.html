@@ -90,6 +90,11 @@
            class="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition text-sm">
             Edit
         </a>
+        <form method="post" action="/admin/stt-models/{{ model.id }}/duplicate">
+            <button type="submit" class="text-sm text-gray-600 hover:text-gray-800 border border-gray-300 px-4 py-2 rounded-lg hover:bg-gray-50 transition">
+                Duplicate
+            </button>
+        </form>
         {% if linked_workflows %}
         <span class="text-sm text-gray-400 px-4 py-2 cursor-not-allowed" title="Cannot delete: used by {{ linked_workflows|length }} workflow(s)">
             Delete

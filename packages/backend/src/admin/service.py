@@ -240,6 +240,28 @@ async def duplicate_llm_model(db: AsyncSession, model_id: UUID) -> Optional[LLMM
     return copy
 
 
+async def duplicate_stt_model(db: AsyncSession, model_id: UUID) -> Optional[STTModel]:
+    """Duplicate an STT model with a new name."""
+    source = await db.get(STTModel, model_id)
+    if not source:
+        return None
+
+    copy = STTModel(
+        name=f"{source.name} (Copy)",
+        provider_type=source.provider_type,
+        base_url=source.base_url,
+        api_key=source.api_key,
+        model_id=source.model_id,
+        default_language=source.default_language,
+        config=source.config,
+        is_active=False,
+    )
+    db.add(copy)
+    await db.flush()
+
+    return copy
+
+
 async def delete_workflow(db: AsyncSession, slug: str) -> bool:
     """Delete a workflow by slug."""
     workflow = await get_workflow(db, slug)
