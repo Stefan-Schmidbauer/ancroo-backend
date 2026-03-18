@@ -31,9 +31,7 @@
             </div>
             <div class="flex items-center gap-3">
                 <span class="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded">{{ tool.tool_type }}</span>
-                <span class="text-xs px-2 py-0.5 rounded {{ 'bg-green-100 text-green-700' if tool.is_active else 'bg-gray-100 text-gray-500' }}">
-                    {{ 'Active' if tool.is_active else 'Inactive' }}
-                </span>
+                {% include "partials/toggle_active_tool.html" %}
                 {% if tool.health_status == 'healthy' %}
                 <span class="w-2 h-2 rounded-full bg-green-500" title="Healthy"></span>
                 {% elif tool.health_status == 'unhealthy' %}

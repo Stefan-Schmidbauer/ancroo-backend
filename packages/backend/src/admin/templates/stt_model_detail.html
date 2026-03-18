@@ -15,9 +15,7 @@
                 {% if model.is_default %}
                 <span class="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded">Default</span>
                 {% endif %}
-                <span class="text-xs px-2 py-0.5 rounded {{ 'bg-green-100 text-green-700' if model.is_active else 'bg-gray-100 text-gray-500' }}">
-                    {{ 'Active' if model.is_active else 'Inactive' }}
-                </span>
+                {% include "partials/toggle_active_stt.html" %}
             </div>
         </div>
     </div>
@@ -92,12 +90,18 @@
            class="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition text-sm">
             Edit
         </a>
+        {% if linked_workflows %}
+        <span class="text-sm text-gray-400 px-4 py-2 cursor-not-allowed" title="Cannot delete: used by {{ linked_workflows|length }} workflow(s)">
+            Delete
+        </span>
+        {% else %}
         <form method="post" action="/admin/stt-models/{{ model.id }}/delete"
-              onsubmit="return confirm('Delete this model? Linked workflows will lose their model reference.')">
+              onsubmit="return confirm('Delete this model?')">
             <button type="submit" class="text-sm text-red-500 hover:text-red-700 px-4 py-2">
                 Delete
             </button>
         </form>
+        {% endif %}
         <a href="/admin/stt-models" class="text-sm text-gray-500 hover:text-gray-700 ml-auto">
             Back
         </a>

@@ -12,9 +12,7 @@
             </div>
             <div class="flex items-center gap-2">
                 <span class="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded">{{ providers_by_key[model.provider_type].label if model.provider_type in providers_by_key else model.provider_type }}</span>
-                <span class="text-xs px-2 py-0.5 rounded {{ 'bg-green-100 text-green-700' if model.is_active else 'bg-gray-100 text-gray-500' }}">
-                    {{ 'Active' if model.is_active else 'Inactive' }}
-                </span>
+                {% include "partials/toggle_active_llm.html" %}
             </div>
         </div>
     </div>
@@ -93,12 +91,23 @@
            class="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition text-sm">
             Edit
         </a>
+        <form method="post" action="/admin/llm-models/{{ model.id }}/duplicate">
+            <button type="submit" class="text-sm text-gray-600 hover:text-gray-800 border border-gray-300 px-4 py-2 rounded-lg hover:bg-gray-50 transition">
+                Duplicate
+            </button>
+        </form>
+        {% if linked_workflows %}
+        <span class="text-sm text-gray-400 px-4 py-2 cursor-not-allowed" title="Cannot delete: used by {{ linked_workflows|length }} workflow(s)">
+            Delete
+        </span>
+        {% else %}
         <form method="post" action="/admin/llm-models/{{ model.id }}/delete"
-              onsubmit="return confirm('Delete this model? Linked workflows will lose their model reference.')">
+              onsubmit="return confirm('Delete this model?')">
             <button type="submit" class="text-sm text-red-500 hover:text-red-700 px-4 py-2">
                 Delete
             </button>
         </form>
+        {% endif %}
         <a href="/admin/llm-models" class="text-sm text-gray-500 hover:text-gray-700 ml-auto">
             Back
         </a>
