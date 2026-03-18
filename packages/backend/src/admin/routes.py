@@ -16,7 +16,7 @@ from src.config import get_settings
 from src.version import get_version_info
 from src.db.session import get_db
 from src.db.models import Category, LLMModel, STTModel, Tool, Workflow
-from src.admin import importer, service
+from src.admin import exporter, importer, service
 from src.integrations.llm import check_health as check_llm_health, list_models as list_llm_models, LLMError
 from src.integrations.stt import check_health as check_stt_health, list_models as list_stt_models, STTError
 from src.integrations.runner import sync_tools_from_runner, RunnerDiscoveryError
@@ -239,78 +239,144 @@ async def create_workflow_route(
     return RedirectResponse(f"/admin/workflows/{workflow.slug}?flash=created", status_code=303)
 
 
-# --- Import Workflow ---
+# --- Import / Export ---
 
 
 @router.get("/import", response_class=HTMLResponse)
 async def import_page(request: Request):
-    """Workflow import page — upload a JSON file."""
+    """Import / Export page."""
     return templates.TemplateResponse("import.html", {"request": request})
 
 
-@router.post("/api/import-workflow")
-async def api_import_workflow(request: Request, db: DbSession):
-    """Import a workflow from a JSON body.
+@router.post("/api/import")
+async def api_import(request: Request, db: DbSession):
+    """Import any entity from a JSON body.
 
-    Used by:
-    - Admin UI (fetch from JavaScript)
-    - Install script (curl -d @file.json)
-
+    Accepts all _type values: llm_model, stt_model, tool, category, workflow, bundle.
     Returns HTMX partial when called from browser, JSON otherwise.
     """
     try:
-        meta = await request.json()
+        data = await request.json()
     except Exception:
-        result = importer.ImportResult(status="error", message="Invalid JSON body")
+        result = importer.ImportResult(status="error", entity_type="unknown", message="Invalid JSON body")
         if request.headers.get("HX-Request"):
             return templates.TemplateResponse(
-                "partials/import_workflow_result.html",
-                {"request": request, "result": result},
+                "partials/import_result.html",
+                {"request": request, "results": [result]},
             )
         return JSONResponse(result.to_dict(), status_code=400)
 
-    result = await importer.import_workflow(db, meta)
+    result = await importer.import_item(db, data)
     await db.commit()
+
+    # Normalize to list of results for the template
+    if isinstance(result, importer.BundleResult):
+        results = result.results
+    else:
+        results = [result]
 
     if request.headers.get("HX-Request"):
         return templates.TemplateResponse(
-            "partials/import_workflow_result.html",
-            {"request": request, "result": result},
+            "partials/import_result.html",
+            {"request": request, "results": results},
         )
-    status_code = 200 if result.status != "error" else 400
-    return JSONResponse(result.to_dict(), status_code=status_code)
+
+    has_error = any(r.status == "error" for r in results)
+    status_code = 400 if has_error else 200
+    return JSONResponse(
+        {"results": [r.to_dict() for r in results]},
+        status_code=status_code,
+    )
 
 
-@router.post("/import", response_class=HTMLResponse)
-async def import_upload(request: Request, db: DbSession, file: UploadFile = File(...)):
-    """Import a workflow from a file upload (form POST)."""
-    content = await file.read()
-    try:
-        meta = json.loads(content)
-    except (json.JSONDecodeError, UnicodeDecodeError) as e:
-        return templates.TemplateResponse("import.html", {
-            "request": request,
-            "flash_message": f"Invalid JSON file: {e}",
-            "flash_type": "error",
-        })
+# Alias for backwards compatibility (install scripts, bookmarks)
+@router.post("/api/import-workflow")
+async def api_import_workflow(request: Request, db: DbSession):
+    """Alias for /api/import — accepts old workflow format too."""
+    return await api_import(request, db)
 
-    result = await importer.import_workflow(db, meta)
-    await db.commit()
 
-    flash_map = {
-        "created": ("success", f"Workflow '{result.name}' imported successfully."),
-        "already_exists": ("success", f"Workflow '{result.slug}' already exists."),
-        "created_inactive": ("success", f"Workflow '{result.name}' imported (inactive — {result.message})."),
-        "reprovisioned": ("success", f"Workflow '{result.name}' reprovisioned."),
-        "error": ("error", f"Import failed: {result.message}"),
-    }
-    flash_type, flash_msg = flash_map.get(result.status, ("error", str(result.status)))
+# --- Export Endpoints ---
 
-    return templates.TemplateResponse("import.html", {
-        "request": request,
-        "flash_message": flash_msg,
-        "flash_type": flash_type,
-    })
+
+@router.get("/api/export/llm-model/{model_id}")
+async def export_llm_model(model_id: UUID, db: DbSession):
+    model = await db.get(LLMModel, model_id)
+    if not model:
+        raise HTTPException(status_code=404, detail="LLM model not found")
+    data = exporter.export_llm_model(model)
+    return JSONResponse(
+        data,
+        headers={"Content-Disposition": f'attachment; filename="llm-model-{model.name}.json"'},
+    )
+
+
+@router.get("/api/export/stt-model/{model_id}")
+async def export_stt_model(model_id: UUID, db: DbSession):
+    model = await db.get(STTModel, model_id)
+    if not model:
+        raise HTTPException(status_code=404, detail="STT model not found")
+    data = exporter.export_stt_model(model)
+    return JSONResponse(
+        data,
+        headers={"Content-Disposition": f'attachment; filename="stt-model-{model.name}.json"'},
+    )
+
+
+@router.get("/api/export/tool/{tool_id}")
+async def export_tool(tool_id: UUID, db: DbSession):
+    tool = await db.get(Tool, tool_id)
+    if not tool:
+        raise HTTPException(status_code=404, detail="Tool not found")
+    data = exporter.export_tool(tool)
+    return JSONResponse(
+        data,
+        headers={"Content-Disposition": f'attachment; filename="tool-{tool.name}.json"'},
+    )
+
+
+@router.get("/api/export/category/{category_id}")
+async def export_category(category_id: UUID, db: DbSession):
+    category = await db.get(Category, category_id)
+    if not category:
+        raise HTTPException(status_code=404, detail="Category not found")
+    data = exporter.export_category(category)
+    return JSONResponse(
+        data,
+        headers={"Content-Disposition": f'attachment; filename="category-{category.name}.json"'},
+    )
+
+
+@router.get("/api/export/workflow/{slug}")
+async def export_workflow_by_slug(slug: str, db: DbSession):
+    result = await db.execute(
+        select(Workflow)
+        .where(Workflow.slug == slug)
+        .options(
+            selectinload(Workflow.category_rel),
+            selectinload(Workflow.llm_model),
+            selectinload(Workflow.stt_model),
+            selectinload(Workflow.tool),
+            selectinload(Workflow.permissions),
+        )
+    )
+    workflow = result.scalar_one_or_none()
+    if not workflow:
+        raise HTTPException(status_code=404, detail="Workflow not found")
+    data = exporter.export_workflow(workflow)
+    return JSONResponse(
+        data,
+        headers={"Content-Disposition": f'attachment; filename="workflow-{slug}.json"'},
+    )
+
+
+@router.get("/api/export/all")
+async def export_all(db: DbSession):
+    data = await exporter.export_all(db)
+    return JSONResponse(
+        data,
+        headers={"Content-Disposition": 'attachment; filename="ancroo-export.json"'},
+    )
 
 
 # --- View / Edit Workflow ---

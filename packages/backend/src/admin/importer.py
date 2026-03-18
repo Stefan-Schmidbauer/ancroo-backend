@@ -1,24 +1,21 @@
-"""Workflow import from JSON definitions.
+"""Import entities from JSON definitions.
 
-Accepts a workflow JSON (the metadata.json format) and creates the
-corresponding database records: LLM models, STT models, tools (find-or-create),
-workflow, and permissions.  For workflows that require n8n, webhook flow
-provisioning is attempted with a short health-check timeout.
+Accepts JSON with a `_type` discriminator and writes it 1:1 to the database.
+No auto-magic, no environment sniffing, no n8n provisioning.
+If a referenced dependency does not exist, the import fails with a clear message.
 
 Used by:
 - Admin UI file upload (POST /admin/import)
-- API endpoint (POST /admin/api/import-workflow)
-- Install script (curl with JSON body)
+- API endpoint (POST /admin/api/import)
 """
 
 import logging
-from dataclasses import dataclass
-from typing import Optional
+from dataclasses import dataclass, field
 
+from sqlalchemy import func as sa_func
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.config import get_settings
 from src.db.models import (
     Category,
     LLMModel,
@@ -30,20 +27,25 @@ from src.db.models import (
 
 logger = logging.getLogger(__name__)
 
-_N8N_CHECK_TIMEOUT = 15.0
+# Import order for bundle items (dependencies first)
+_TYPE_ORDER = {
+    "category": 0,
+    "llm_model": 1,
+    "stt_model": 2,
+    "tool": 3,
+    "workflow": 4,
+}
 
 
 @dataclass
 class ImportResult:
-    status: str  # "created", "already_exists", "created_inactive", "reprovisioned", "error"
-    slug: str = ""
+    status: str  # "created", "skipped", "error"
+    entity_type: str = ""
     name: str = ""
     message: str = ""
 
     def to_dict(self) -> dict:
-        d = {"status": self.status}
-        if self.slug:
-            d["slug"] = self.slug
+        d = {"status": self.status, "entity_type": self.entity_type}
         if self.name:
             d["name"] = self.name
         if self.message:
@@ -51,566 +53,303 @@ class ImportResult:
         return d
 
 
-# ---------------------------------------------------------------------------
-# LLM Model find-or-create
-# ---------------------------------------------------------------------------
+@dataclass
+class BundleResult:
+    results: list[ImportResult] = field(default_factory=list)
+
+    def to_dict(self) -> dict:
+        return {"results": [r.to_dict() for r in self.results]}
 
 
-async def _ensure_default_llm_model(session: AsyncSession) -> LLMModel:
-    settings = get_settings()
-    result = await session.execute(
-        select(LLMModel).where(LLMModel.name == "Ollama (default)")
-    )
-    model = result.scalar_one_or_none()
-    if model is None:
-        model = LLMModel(
-            name="Ollama (default)",
-            provider_type="ollama",
-            base_url=settings.ollama_base_url or "http://localhost:11434",
-            model_id=settings.ollama_default_model,
-        )
-        session.add(model)
-        await session.flush()
-        logger.info("Created default Ollama LLM model (%s)", model.base_url)
-    return model
-
-
-async def _ensure_cuda_llm_model(session: AsyncSession) -> LLMModel:
-    settings = get_settings()
-    result = await session.execute(
-        select(LLMModel).where(LLMModel.name == "Ollama-CUDA (GPU)")
-    )
-    model = result.scalar_one_or_none()
-    if model is None:
-        model = LLMModel(
-            name="Ollama-CUDA (GPU)",
-            provider_type="ollama",
-            base_url=settings.ollama_cuda_base_url or settings.ollama_base_url,
-            model_id=settings.ollama_cuda_default_model,
-        )
-        session.add(model)
-        await session.flush()
-        logger.info("Created Ollama-CUDA LLM model (%s)", model.base_url)
-    return model
-
-
-async def _ensure_rocm_llm_model(session: AsyncSession) -> LLMModel:
-    settings = get_settings()
-    result = await session.execute(
-        select(LLMModel).where(LLMModel.name == "Ollama-ROCm (GPU)")
-    )
-    model = result.scalar_one_or_none()
-    if model is None:
-        model = LLMModel(
-            name="Ollama-ROCm (GPU)",
-            provider_type="ollama",
-            base_url=settings.ollama_rocm_base_url or settings.ollama_base_url,
-            model_id=settings.ollama_rocm_default_model,
-        )
-        session.add(model)
-        await session.flush()
-        logger.info("Created Ollama-ROCm LLM model (%s)", model.base_url)
-    return model
-
-
-# ---------------------------------------------------------------------------
-# STT Model find-or-create
-# ---------------------------------------------------------------------------
-
-
-async def _ensure_speaches_stt_model(session: AsyncSession) -> STTModel:
-    settings = get_settings()
-    result = await session.execute(
-        select(STTModel).where(STTModel.name == "Speaches")
-    )
-    model = result.scalar_one_or_none()
-    if model is None:
-        model = STTModel(
-            name="Speaches",
-            provider_type="whisper_openai_compatible",
-            base_url=settings.whisper_base_url or "http://speaches:8000",
-            model_id=settings.whisper_model or "Systran/faster-whisper-large-v3",
-        )
-        session.add(model)
-        await session.flush()
-        logger.info("Created Speaches STT model (%s)", model.base_url)
-    return model
-
-
-async def _ensure_rocm_stt_model(session: AsyncSession) -> Optional[STTModel]:
-    settings = get_settings()
-    if not settings.whisper_rocm_base_url:
-        return None
-    result = await session.execute(
-        select(STTModel).where(STTModel.name == "Whisper-ROCm (GPU)")
-    )
-    model = result.scalar_one_or_none()
-    if model is None:
-        model = STTModel(
-            name="Whisper-ROCm (GPU)",
-            provider_type="whisper_openai_compatible",
-            base_url=settings.whisper_rocm_base_url,
-            model_id=settings.whisper_rocm_model,
-        )
-        session.add(model)
-        await session.flush()
-        logger.info("Created Whisper-ROCm STT model (%s)", model.base_url)
-    return model
-
-
-# ---------------------------------------------------------------------------
-# Tool find-or-create (n8n webhooks, AR plugins, custom APIs)
-# ---------------------------------------------------------------------------
-
-
-async def _ensure_n8n_tool(
-    session: AsyncSession, slug: str, flow_name: str,
-) -> Optional[Tool]:
-    """Create a Tool entry for an n8n webhook (provisioned later)."""
-    settings = get_settings()
-    if not settings.n8n_api_key:
-        return None
-
-    # Check if tool already exists for this workflow
-    source_id = f"n8n:{slug}"
-    result = await session.execute(
-        select(Tool).where(Tool.source_id == source_id)
-    )
-    tool = result.scalar_one_or_none()
-    if tool is None:
-        tool = Tool(
-            name=flow_name,
-            tool_type="n8n_webhook",
-            endpoint_url="",  # Filled during n8n provisioning
-            http_method="POST",
-            headers={"Content-Type": "application/json"},
-            payload_template="{{ _input | tojson }}",
-            response_mapping="$.result",
-            timeout=120,
-            source="imported",
-            source_id=source_id,
-            n8n_base_url=settings.n8n_url,
-            n8n_api_key=settings.n8n_api_key,
-        )
-        session.add(tool)
-        await session.flush()
-        logger.info("Created n8n tool '%s'", flow_name)
-    return tool
-
-
-async def _ensure_custom_tool(
-    session: AsyncSession, slug: str, target_config: dict,
-) -> Tool:
-    """Create a Tool entry from a custom target_config (e.g. AR plugin endpoints)."""
-    source_id = f"custom:{slug}"
-    result = await session.execute(
-        select(Tool).where(Tool.source_id == source_id)
-    )
-    tool = result.scalar_one_or_none()
-    if tool is None:
-        tool = Tool(
-            name=slug,
-            tool_type="custom_api",
-            endpoint_url=target_config.get("url", ""),
-            http_method=target_config.get("method", "POST"),
-            headers=target_config.get("headers", {"Content-Type": "application/json"}),
-            payload_template=target_config.get("payload_template"),
-            response_mapping=target_config.get("response_mapping", "$.result"),
-            timeout=target_config.get("timeout", 120),
-            source="imported",
-            source_id=source_id,
-        )
-        session.add(tool)
-        await session.flush()
-        logger.info("Created custom tool '%s'", slug)
-    return tool
-
-
-# ---------------------------------------------------------------------------
-# Resolution (pick best model for the backend)
-# ---------------------------------------------------------------------------
-
-
-async def _resolve_llm_model(
-    session: AsyncSession, backend: Optional[str],
-) -> Optional[LLMModel]:
-    settings = get_settings()
-    selected = settings.selected_backends
-
-    if backend == "cuda":
-        return await _ensure_cuda_llm_model(session)
-    if backend == "rocm":
-        return await _ensure_rocm_llm_model(session)
-
-    for key in ("rocm", "cuda"):
-        if key in selected:
-            if key == "rocm":
-                return await _ensure_rocm_llm_model(session)
-            return await _ensure_cuda_llm_model(session)
-
-    return await _ensure_default_llm_model(session)
-
-
-async def _resolve_stt_model(
-    session: AsyncSession, backend: Optional[str],
-) -> Optional[STTModel]:
-    settings = get_settings()
-    selected = settings.selected_backends
-
-    if backend == "rocm":
-        rocm = await _ensure_rocm_stt_model(session)
-        if rocm:
-            return rocm
-        return await _ensure_speaches_stt_model(session)
-    if backend == "cuda":
-        return await _ensure_speaches_stt_model(session)
-
-    for key in ("rocm", "cuda"):
-        if key in selected:
-            if key == "rocm":
-                rocm = await _ensure_rocm_stt_model(session)
-                if rocm:
-                    return rocm
-            return await _ensure_speaches_stt_model(session)
-
-    return await _ensure_speaches_stt_model(session)
-
-
-# ---------------------------------------------------------------------------
-# n8n provisioning
-# ---------------------------------------------------------------------------
-
-
-async def _check_n8n_ready() -> bool:
-    settings = get_settings()
-    if not settings.n8n_api_key:
-        return False
-
-    from src.integrations.n8n import N8nProvider
-
-    n8n = N8nProvider(
-        base_url=settings.n8n_url,
-        api_key=settings.n8n_api_key,
+async def import_item(session: AsyncSession, data: dict) -> ImportResult | BundleResult:
+    """Route to the correct importer based on _type."""
+    item_type = data.get("_type")
+    if item_type == "llm_model":
+        return await _import_llm_model(session, data)
+    if item_type == "stt_model":
+        return await _import_stt_model(session, data)
+    if item_type == "tool":
+        return await _import_tool(session, data)
+    if item_type == "category":
+        return await _import_category(session, data)
+    if item_type == "workflow":
+        return await _import_workflow(session, data)
+    if item_type == "bundle":
+        return await _import_bundle(session, data)
+    return ImportResult(
+        status="error",
+        entity_type=str(item_type or "unknown"),
+        message=f"Unknown type: '{item_type}'. Expected: llm_model, stt_model, tool, category, workflow, or bundle.",
     )
 
-    try:
-        result = await n8n.health_check()
-        if result.get("healthy"):
-            logger.info("n8n is ready for provisioning")
-            return True
-    except Exception as e:
-        logger.debug("n8n readiness check failed: %s", e)
-
-    logger.info("n8n is not ready")
-    return False
-
-
-async def _provision_n8n_flow(
-    session: AsyncSession, workflow: Workflow, tool: Tool, meta: dict,
-) -> bool:
-    """Link to an existing n8n webhook flow or create one, then update the tool."""
-    settings = get_settings()
-    from src.integrations.n8n import N8nError, N8nProvider
-
-    n8n = N8nProvider(
-        base_url=settings.n8n_url,
-        api_key=settings.n8n_api_key,
-    )
-
-    flow_name = meta.get("n8n_workflow_name", workflow.name)
-    logger.info("Provisioning n8n flow '%s' for '%s'", flow_name, workflow.slug)
-
-    try:
-        # First: check if a matching flow already exists in n8n
-        existing_flow = await n8n.find_flow_by_name(flow_name)
-        if existing_flow and existing_flow.get("webhook_url"):
-            flow_id = existing_flow["id"]
-            webhook_url = existing_flow["webhook_url"]
-
-            if not existing_flow.get("active"):
-                await n8n.activate_flow(flow_id)
-
-            tool.endpoint_url = webhook_url
-            tool.n8n_flow_id = flow_id
-            workflow.is_active = True
-            await session.flush()
-
-            logger.info("Linked existing n8n flow for '%s': %s", workflow.slug, webhook_url)
-            return True
-
-        # Clean up orphaned flow from a previous failed attempt
-        if tool.n8n_flow_id:
-            logger.info("Cleaning up orphaned n8n flow %s", tool.n8n_flow_id)
-            deleted = await n8n.delete_flow(tool.n8n_flow_id)
-            if deleted:
-                logger.info("Deleted orphaned n8n flow %s", tool.n8n_flow_id)
-            tool.n8n_flow_id = None
-            await session.flush()
-
-        # Create new flow
-        custom_wf = meta.get("n8n_workflow_json")
-        result = await n8n.create_webhook_flow(
-            flow_name,
-            webhook_path=workflow.slug,
-            custom_workflow_json=custom_wf,
-        )
-        flow_id = result["flow_id"]
-        webhook_url = result["webhook_url"]
-
-        activated = await n8n.activate_flow(flow_id)
-        if not activated:
-            raise N8nError(f"Failed to activate flow {flow_id}")
-
-        # Update the tool with the webhook URL
-        tool.endpoint_url = webhook_url
-        tool.n8n_flow_id = flow_id
-        workflow.is_active = True
-        await session.flush()
-
-        logger.info("Provisioned n8n flow for '%s': %s", workflow.slug, webhook_url)
-        return True
-
-    except Exception as e:
-        logger.warning("n8n provisioning failed for '%s': %s", workflow.slug, e)
-        return False
-
 
 # ---------------------------------------------------------------------------
-# Category find-or-create
+# LLM Model
 # ---------------------------------------------------------------------------
 
-_CATEGORY_ICONS = {
-    "text": "\u270F\uFE0F",
-    "voice": "\U0001F399\uFE0F",
-    "automation": "\u26A1",
-    "translation": "\U0001F524",
-    "code": "\U0001F4BB",
-    "image": "\U0001F5BC\uFE0F",
-    "search": "\U0001F50D",
-    "data": "\U0001F4CA",
-    "email": "\U0001F4E7",
-    "chat": "\U0001F4AC",
-    "summary": "\U0001F4DD",
-    "security": "\U0001F512",
-    "media": "\U0001F3AC",
-    "file": "\U0001F4C1",
-}
 
-
-async def _resolve_category(
-    session: AsyncSession, name: Optional[str],
-) -> Optional[Category]:
-    """Find or create a category by name. Returns None if name is empty."""
+async def _import_llm_model(session: AsyncSession, data: dict) -> ImportResult:
+    name = data.get("name")
     if not name:
-        return None
-    from sqlalchemy import func as sa_func
-    result = await session.execute(
+        return ImportResult(status="error", entity_type="llm_model", message="Missing required field: name")
+
+    existing = await session.execute(select(LLMModel).where(LLMModel.name == name))
+    if existing.scalar_one_or_none():
+        return ImportResult(status="skipped", entity_type="llm_model", name=name, message="Already exists")
+
+    model = LLMModel(
+        name=name,
+        provider_type=data.get("provider_type", "ollama"),
+        base_url=data.get("base_url", ""),
+        endpoint_execute=data.get("endpoint_execute", "/v1/chat/completions"),
+        endpoint_models=data.get("endpoint_models", "/v1/models"),
+        model_id=data.get("model_id", ""),
+        default_temperature=data.get("default_temperature", 0.3),
+        config=data.get("config", {}),
+        is_active=data.get("is_active", True),
+    )
+    session.add(model)
+    await session.flush()
+    logger.info("Imported LLM model '%s'", name)
+    return ImportResult(status="created", entity_type="llm_model", name=name)
+
+
+# ---------------------------------------------------------------------------
+# STT Model
+# ---------------------------------------------------------------------------
+
+
+async def _import_stt_model(session: AsyncSession, data: dict) -> ImportResult:
+    name = data.get("name")
+    if not name:
+        return ImportResult(status="error", entity_type="stt_model", message="Missing required field: name")
+
+    existing = await session.execute(select(STTModel).where(STTModel.name == name))
+    if existing.scalar_one_or_none():
+        return ImportResult(status="skipped", entity_type="stt_model", name=name, message="Already exists")
+
+    model = STTModel(
+        name=name,
+        provider_type=data.get("provider_type", "whisper_openai_compatible"),
+        base_url=data.get("base_url", ""),
+        model_id=data.get("model_id", ""),
+        default_language=data.get("default_language"),
+        config=data.get("config", {}),
+        is_active=data.get("is_active", True),
+        is_default=data.get("is_default", False),
+    )
+    session.add(model)
+    await session.flush()
+    logger.info("Imported STT model '%s'", name)
+    return ImportResult(status="created", entity_type="stt_model", name=name)
+
+
+# ---------------------------------------------------------------------------
+# Tool
+# ---------------------------------------------------------------------------
+
+
+async def _import_tool(session: AsyncSession, data: dict) -> ImportResult:
+    name = data.get("name")
+    if not name:
+        return ImportResult(status="error", entity_type="tool", message="Missing required field: name")
+
+    existing = await session.execute(select(Tool).where(Tool.name == name))
+    if existing.scalar_one_or_none():
+        return ImportResult(status="skipped", entity_type="tool", name=name, message="Already exists")
+
+    tool = Tool(
+        name=name,
+        tool_type=data.get("tool_type", "custom_api"),
+        endpoint_url=data.get("endpoint_url", ""),
+        http_method=data.get("http_method", "POST"),
+        headers=data.get("headers", {}),
+        payload_template=data.get("payload_template"),
+        response_mapping=data.get("response_mapping"),
+        timeout=data.get("timeout", 120),
+        description=data.get("description"),
+        input_schema=data.get("input_schema"),
+        output_schema=data.get("output_schema"),
+        is_active=data.get("is_active", True),
+        source=data.get("source", "imported"),
+        source_id=data.get("source_id"),
+        n8n_base_url=data.get("n8n_base_url"),
+        n8n_flow_id=data.get("n8n_flow_id"),
+    )
+    session.add(tool)
+    await session.flush()
+    logger.info("Imported tool '%s'", name)
+    return ImportResult(status="created", entity_type="tool", name=name)
+
+
+# ---------------------------------------------------------------------------
+# Category
+# ---------------------------------------------------------------------------
+
+
+async def _import_category(session: AsyncSession, data: dict) -> ImportResult:
+    name = data.get("name")
+    if not name:
+        return ImportResult(status="error", entity_type="category", message="Missing required field: name")
+
+    existing = await session.execute(
         select(Category).where(sa_func.lower(Category.name) == name.lower())
     )
-    category = result.scalar_one_or_none()
-    if category is None:
-        icon = _CATEGORY_ICONS.get(name, "\U0001f527")
-        category = Category(name=name, icon=icon)
-        session.add(category)
-        await session.flush()
-        logger.info("Created category '%s' (%s)", name, icon)
-    return category
+    if existing.scalar_one_or_none():
+        return ImportResult(status="skipped", entity_type="category", name=name, message="Already exists")
 
-
-# ---------------------------------------------------------------------------
-# Recipe builder
-# ---------------------------------------------------------------------------
-
-
-def _build_recipe(meta: dict) -> dict:
-    """Build a collection recipe from workflow metadata."""
-    if meta.get("recipe"):
-        return meta["recipe"]
-
-    sources = meta.get("input_sources", ["text_selection"])
-    recipe: dict = {"collect": sources}
-
-    form_fields = meta.get("form_fields")
-    if form_fields and "form_fields" in sources:
-        recipe["form_fields"] = form_fields
-
-    output_fields = meta.get("output_fields")
-    if output_fields:
-        recipe["output_fields"] = output_fields
-
-    if "audio" in sources:
-        recipe["file_config"] = {
-            "accept": meta.get("audio_accept", "audio/*"),
-            "max_size_mb": meta.get("audio_max_size_mb", 50),
-            "label": meta.get("audio_label", "Audio recording"),
-            "required": True,
-        }
-
-    return recipe
-
-
-# ---------------------------------------------------------------------------
-# Main import function
-# ---------------------------------------------------------------------------
-
-
-def _validate_meta(meta: dict) -> Optional[str]:
-    for field in ("slug", "name", "workflow_type"):
-        if not meta.get(field):
-            return f"Missing required field: {field}"
-    return None
-
-
-async def import_workflow(session: AsyncSession, meta: dict) -> ImportResult:
-    """Import a single workflow from a JSON definition."""
-    error = _validate_meta(meta)
-    if error:
-        return ImportResult(status="error", message=error)
-
-    slug = meta["slug"]
-    name = meta["name"]
-    requires = meta.get("requires", [])
-    backend = meta.get("backend")
-
-    # Check for existing workflow
-    existing_result = await session.execute(
-        select(Workflow).where(Workflow.slug == slug)
+    category = Category(
+        name=name,
+        icon=data.get("icon", "\U0001f527"),
     )
-    existing = existing_result.scalar_one_or_none()
+    session.add(category)
+    await session.flush()
+    logger.info("Imported category '%s'", name)
+    return ImportResult(status="created", entity_type="category", name=name)
 
-    if existing:
-        if existing.is_active:
+
+# ---------------------------------------------------------------------------
+# Workflow
+# ---------------------------------------------------------------------------
+
+
+async def _import_workflow(session: AsyncSession, data: dict) -> ImportResult:
+    slug = data.get("slug")
+    name = data.get("name")
+    wf_type = data.get("workflow_type")
+
+    for field_name, value in [("slug", slug), ("name", name), ("workflow_type", wf_type)]:
+        if not value:
             return ImportResult(
-                status="already_exists", slug=slug, name=existing.name,
+                status="error", entity_type="workflow",
+                message=f"Missing required field: {field_name}",
             )
 
-        # Inactive + requires n8n → retry provisioning
-        if "n8n" in requires and existing.tool_id:
-            tool = await session.get(Tool, existing.tool_id)
-            if tool and not tool.endpoint_url:
-                n8n_ready = await _check_n8n_ready()
-                if n8n_ready:
-                    success = await _provision_n8n_flow(session, existing, tool, meta)
-                    if success:
-                        return ImportResult(
-                            status="reprovisioned", slug=slug, name=existing.name,
-                        )
-                return ImportResult(
-                    status="created_inactive", slug=slug, name=existing.name,
-                    message="n8n not ready for provisioning",
-                )
+    # Check existing
+    existing = await session.execute(select(Workflow).where(Workflow.slug == slug))
+    if existing.scalar_one_or_none():
+        return ImportResult(status="skipped", entity_type="workflow", name=name, message=f"Workflow '{slug}' already exists")
 
-        return ImportResult(
-            status="already_exists", slug=slug, name=existing.name,
+    # Resolve LLM model by name
+    llm_model_id = None
+    llm_model_name = data.get("llm_model_name")
+    if llm_model_name:
+        result = await session.execute(select(LLMModel).where(LLMModel.name == llm_model_name))
+        llm_model = result.scalar_one_or_none()
+        if not llm_model:
+            return ImportResult(
+                status="error", entity_type="workflow", name=name,
+                message=f"LLM Model '{llm_model_name}' not found. Import it first or create it manually.",
+            )
+        llm_model_id = llm_model.id
+
+    # Resolve STT model by name
+    stt_model_id = None
+    stt_model_name = data.get("stt_model_name")
+    if stt_model_name:
+        result = await session.execute(select(STTModel).where(STTModel.name == stt_model_name))
+        stt_model = result.scalar_one_or_none()
+        if not stt_model:
+            return ImportResult(
+                status="error", entity_type="workflow", name=name,
+                message=f"STT Model '{stt_model_name}' not found. Import it first or create it manually.",
+            )
+        stt_model_id = stt_model.id
+
+    # Resolve tool by name
+    tool_id = None
+    tool_name = data.get("tool_name")
+    if tool_name:
+        result = await session.execute(select(Tool).where(Tool.name == tool_name))
+        tool = result.scalar_one_or_none()
+        if not tool:
+            return ImportResult(
+                status="error", entity_type="workflow", name=name,
+                message=f"Tool '{tool_name}' not found. Import it first or create it manually.",
+            )
+        tool_id = tool.id
+
+    # Resolve category by name
+    category_id = None
+    category_name = data.get("category_name")
+    if category_name:
+        result = await session.execute(
+            select(Category).where(sa_func.lower(Category.name) == category_name.lower())
         )
+        category = result.scalar_one_or_none()
+        if not category:
+            return ImportResult(
+                status="error", entity_type="workflow", name=name,
+                message=f"Category '{category_name}' not found. Import it first or create it manually.",
+            )
+        category_id = category.id
 
-    # --- Resolve execution target ---
-    #
-    # Auto-detect from workflow_type when 'requires' is not set.
-    # The metadata format uses workflow_type + tool.tool_type to signal
-    # the execution target; 'requires' is an optional explicit override.
-
-    llm_model = None
-    stt_model = None
-    tool = None
-    wf_type = meta.get("workflow_type")
-    tool_meta = meta.get("tool")
-
-    needs_llm = "llm" in requires or wf_type == "text_transformation"
-    needs_stt = "whisper" in requires or wf_type == "speech_to_text"
-    needs_n8n = "n8n" in requires or (
-        tool_meta is not None and tool_meta.get("tool_type") == "n8n_webhook"
-    )
-
-    if needs_llm:
-        llm_model = await _resolve_llm_model(session, backend)
-
-    if needs_stt:
-        stt_model = await _resolve_stt_model(session, backend)
-
-    if needs_n8n:
-        flow_name = (
-            tool_meta.get("n8n_workflow_name", name) if tool_meta
-            else meta.get("n8n_workflow_name", name)
-        )
-        tool = await _ensure_n8n_tool(session, slug, flow_name)
-
-    if meta.get("target_config") and not tool:
-        # Custom workflows with direct target_config (e.g. AR plugin endpoints)
-        tool = await _ensure_custom_tool(session, slug, meta["target_config"])
-
-    if tool_meta and not tool:
-        # Tool block format (AR plugins, custom APIs) — map to target_config
-        target_config = {
-            "url": tool_meta.get("endpoint_url", ""),
-            "method": tool_meta.get("http_method", "POST"),
-            "headers": tool_meta.get("headers", {"Content-Type": "application/json"}),
-            "payload_template": tool_meta.get("payload_template"),
-            "response_mapping": tool_meta.get("response_mapping", "$.result"),
-            "timeout": tool_meta.get("timeout", 120),
-        }
-        tool = await _ensure_custom_tool(session, slug, target_config)
-
-    # --- Resolve category ---
-
-    category = await _resolve_category(session, meta.get("category"))
-
-    # --- Build recipe ---
-
-    recipe = _build_recipe(meta)
-
-    # --- Create workflow ---
-
+    # Create workflow
     workflow = Workflow(
         slug=slug,
         name=name,
-        description=meta.get("description"),
-        category_id=category.id if category else None,
-        workflow_type=meta.get("workflow_type"),
-        recipe=recipe,
-        output_action=meta.get("output_action"),
-        default_hotkey=meta.get("default_hotkey"),
-        demo_url=meta.get("demo_url"),
-        timeout_seconds=meta.get("timeout_seconds", 60),
-        # Execution target (exactly one)
-        llm_model_id=llm_model.id if llm_model else None,
-        prompt_template=meta.get("prompt_template") if llm_model else None,
-        temperature=meta.get("temperature") if llm_model else None,
-        stt_model_id=stt_model.id if stt_model else None,
-        tool_id=tool.id if tool else None,
+        description=data.get("description"),
+        workflow_type=wf_type,
+        category_id=category_id,
+        llm_model_id=llm_model_id,
+        stt_model_id=stt_model_id,
+        tool_id=tool_id,
+        prompt_template=data.get("prompt_template"),
+        temperature=data.get("temperature"),
+        recipe=data.get("recipe"),
+        output_action=data.get("output_action"),
+        default_hotkey=data.get("default_hotkey"),
+        demo_url=data.get("demo_url"),
+        timeout_seconds=data.get("timeout_seconds", 60),
+        version=data.get("version", "1.0.0"),
+        is_active=data.get("is_active", True),
     )
     session.add(workflow)
     await session.flush()
 
-    # Default permissions
-    for group in ("standard-users", "admin-users"):
-        session.add(WorkflowPermission(
-            workflow_id=workflow.id,
-            group_name=group,
-            permission_level="execute",
-        ))
+    # Create permissions
+    permissions = data.get("permissions", [])
+    if not permissions:
+        # Default permissions if none specified
+        permissions = [
+            {"group_name": "standard-users", "permission_level": "execute"},
+            {"group_name": "admin-users", "permission_level": "execute"},
+        ]
+    for perm in permissions:
+        if perm.get("group_name"):
+            session.add(WorkflowPermission(
+                workflow_id=workflow.id,
+                group_name=perm["group_name"],
+                permission_level=perm.get("permission_level", "execute"),
+            ))
     await session.flush()
 
-    # --- n8n provisioning (best-effort) ---
-
-    if needs_n8n and tool:
-        n8n_ready = await _check_n8n_ready()
-        if n8n_ready:
-            success = await _provision_n8n_flow(session, workflow, tool, meta)
-            if not success:
-                workflow.is_active = False
-                await session.flush()
-                return ImportResult(
-                    status="created_inactive", slug=slug, name=name,
-                    message="Workflow created but n8n flow provisioning failed",
-                )
-        else:
-            workflow.is_active = False
-            await session.flush()
-            return ImportResult(
-                status="created_inactive", slug=slug, name=name,
-                message="Workflow created but n8n not ready",
-            )
-
     logger.info("Imported workflow '%s' (%s)", slug, name)
-    return ImportResult(status="created", slug=slug, name=name)
+    return ImportResult(status="created", entity_type="workflow", name=name)
+
+
+# ---------------------------------------------------------------------------
+# Bundle
+# ---------------------------------------------------------------------------
+
+
+async def _import_bundle(session: AsyncSession, data: dict) -> BundleResult:
+    """Import a bundle of items in dependency order."""
+    items = data.get("items", [])
+    if not items:
+        return BundleResult(results=[
+            ImportResult(status="error", entity_type="bundle", message="Bundle contains no items"),
+        ])
+
+    # Sort by dependency order
+    sorted_items = sorted(items, key=lambda x: _TYPE_ORDER.get(x.get("_type", ""), 99))
+
+    results = []
+    for item in sorted_items:
+        result = await import_item(session, item)
+        if isinstance(result, BundleResult):
+            results.extend(result.results)
+        else:
+            results.append(result)
+
+    return BundleResult(results=results)
