@@ -144,7 +144,7 @@ class STTModel(Base):
     )
     base_url: Mapped[str] = mapped_column(
         String(500), nullable=False,
-        comment="e.g. 'http://whisper-rocm:8002'"
+        comment="e.g. 'http://whisper-rocm:8000'"
     )
     api_key: Mapped[Optional[str]] = mapped_column(
         String(500),
