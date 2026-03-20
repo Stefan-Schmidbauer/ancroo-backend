@@ -33,6 +33,10 @@ def _cleanup_stale_uploads(upload_dir: str, max_age_seconds: int = 3600) -> None
     now = time.time()
     for filename in os.listdir(upload_dir):
         filepath = os.path.join(upload_dir, filename)
+        # Skip symlinks to prevent deletion of arbitrary files via symlink attacks
+        if os.path.islink(filepath):
+            logger.warning("Skipping symlink in upload dir: %s", filename)
+            continue
         if os.path.isfile(filepath):
             age = now - os.path.getmtime(filepath)
             if age > max_age_seconds:

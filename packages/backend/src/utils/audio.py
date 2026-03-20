@@ -3,6 +3,7 @@
 import logging
 import os
 import subprocess
+from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
@@ -43,7 +44,9 @@ def convert_audio_to_wav(src_path: str, content_type: str) -> tuple[str, str, st
     if content_type in NATIVE_AUDIO_TYPES:
         return src_path, content_type, os.path.basename(src_path)
 
-    wav_path = src_path.rsplit(".", 1)[0] + "_converted.wav"
+    # Build output path safely using pathlib to prevent path traversal
+    src_resolved = Path(src_path).resolve()
+    wav_path = str(src_resolved.with_name(src_resolved.stem + "_converted.wav"))
     file_size = os.path.getsize(src_path)
     logger.info(
         "Converting audio: %s (%s, %d bytes) → WAV",

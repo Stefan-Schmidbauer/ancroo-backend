@@ -5,6 +5,7 @@ import hashlib
 import base64
 from datetime import datetime, timezone
 from typing import Optional
+from urllib.parse import urlencode
 from uuid import UUID
 
 import httpx
@@ -60,7 +61,7 @@ def get_authorization_url(state: str, code_challenge: str, redirect_uri: str) ->
         "code_challenge": code_challenge,
         "code_challenge_method": "S256",
     }
-    query = "&".join(f"{k}={v}" for k, v in params.items())
+    query = urlencode(params)
     return f"{settings.oidc_authorization_url}?{query}"
 
 

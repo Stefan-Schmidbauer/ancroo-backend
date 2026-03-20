@@ -2,6 +2,7 @@
 
 import logging
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Any, Optional
 from uuid import UUID
 
@@ -41,6 +42,13 @@ async def execute_stt_workflow(
     file_path = input_data.get("file_path")
     if not file_path:
         raise STTExecutionError("No audio file provided")
+
+    # Validate file_path is inside the upload temp directory
+    from src.config import get_settings
+    _settings = get_settings()
+    _upload_dir = Path(_settings.upload_temp_dir).resolve()
+    if not Path(file_path).resolve().is_relative_to(_upload_dir):
+        raise STTExecutionError("Invalid file path")
 
     file_info = input_data.get("file_info", {})
 

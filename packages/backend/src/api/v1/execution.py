@@ -3,6 +3,7 @@
 import json
 import logging
 import os
+from pathlib import Path
 from typing import Optional
 from uuid import UUID, uuid4
 
@@ -174,9 +175,21 @@ async def execute_workflow_with_file(
 
     # Save to temp file
     os.makedirs(settings.upload_temp_dir, exist_ok=True)
-    ext = os.path.splitext(file.filename or "")[1] or ".bin"
+
+    # Whitelist allowed file extensions to prevent uploading arbitrary file types
+    _ALLOWED_EXTENSIONS = {".wav", ".webm", ".ogg", ".mp3", ".flac", ".mpeg", ".m4a", ".bin"}
+    raw_ext = os.path.splitext(file.filename or "")[1].lower() if file.filename else ""
+    ext = raw_ext if raw_ext in _ALLOWED_EXTENSIONS else ".bin"
     temp_filename = f"{uuid4()}{ext}"
     temp_path = os.path.join(settings.upload_temp_dir, temp_filename)
+
+    # Verify the resolved path is inside the upload directory
+    upload_dir = Path(settings.upload_temp_dir).resolve()
+    if not Path(temp_path).resolve().is_relative_to(upload_dir):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid file path",
+        )
 
     wav_temp_path: str | None = None
 
