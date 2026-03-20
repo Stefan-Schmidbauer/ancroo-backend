@@ -81,27 +81,30 @@ def _build_recipe(sources: list[str], form_fields: list | None = None,
     return recipe
 
 
-# --- Dashboard ---
+# --- Home ---
 
 @router.get("/", response_class=HTMLResponse)
-async def dashboard(request: Request, db: DbSession):
-    """Admin dashboard showing all workflows and stats."""
-    workflows = await service.list_workflows(db)
+async def home(request: Request, db: DbSession):
+    """Home page with stats and quick links."""
     stats = await service.get_workflow_stats(db)
-    return templates.TemplateResponse("dashboard.html", {
+    return templates.TemplateResponse("home.html", {
         "request": request,
-        "workflows": workflows,
         "stats": stats,
-        **_flash_context(request),
+        **get_version_info(),
     })
 
 
-# --- Workflow List (redirect to dashboard) ---
+# --- Workflows ---
 
-@router.get("/workflows")
-async def workflows_list(request: Request):
-    """Redirect /admin/workflows to the dashboard which lists all workflows."""
-    return RedirectResponse(url="/admin/", status_code=307)
+@router.get("/workflows", response_class=HTMLResponse)
+async def workflows_page(request: Request, db: DbSession):
+    """Workflow list page."""
+    workflows = await service.list_workflows(db)
+    return templates.TemplateResponse("dashboard.html", {
+        "request": request,
+        "workflows": workflows,
+        **_flash_context(request),
+    })
 
 
 # --- Create Workflow (Wizard) ---

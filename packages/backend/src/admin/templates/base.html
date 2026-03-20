@@ -17,6 +17,11 @@
         @keyframes toast-out { from { opacity: 1; } to { opacity: 0; } }
         .toast { animation: toast-in .3s ease-out; }
         .toast-dismiss { animation: toast-out .3s ease-in forwards; }
+        .nav-dropdown { position: relative; }
+        .nav-dropdown-menu { display: none; position: absolute; top: 100%; left: 0; margin-top: 0.5rem; min-width: 10rem; background: white; border: 1px solid #e5e7eb; border-radius: 0.5rem; box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1); z-index: 50; padding: 0.25rem 0; }
+        .nav-dropdown.open .nav-dropdown-menu { display: block; }
+        .nav-dropdown-menu a { display: block; padding: 0.5rem 1rem; font-size: 0.875rem; color: #4b5563; text-decoration: none; }
+        .nav-dropdown-menu a:hover { background: #f3f4f6; color: #111827; }
     </style>
 </head>
 <body class="bg-gray-50 min-h-screen">
@@ -28,14 +33,41 @@
                 Ancroo
             </a>
             <div class="flex items-center gap-4">
-                <a href="/admin/" class="text-sm text-gray-600 hover:text-gray-900">Workflows</a>
-                <a href="/admin/llm-models" class="text-sm text-gray-600 hover:text-gray-900">LLM Models</a>
-                <a href="/admin/stt-models" class="text-sm text-gray-600 hover:text-gray-900">STT Models</a>
-                <a href="/admin/tools" class="text-sm text-gray-600 hover:text-gray-900">Tools</a>
-                <a href="/admin/categories" class="text-sm text-gray-600 hover:text-gray-900">Categories</a>
-                <a href="/admin/import" class="text-sm text-gray-600 hover:text-gray-900">Import / Export</a>
-                <a href="/admin/demo" class="text-sm text-gray-600 hover:text-gray-900">Demo</a>
-                <a href="/admin/about" class="text-sm text-gray-600 hover:text-gray-900">About</a>
+                <a href="/admin/workflows" class="text-sm {{ 'text-gray-900 font-medium' if request.url.path in ['/admin/workflows'] or request.url.path.startswith('/admin/workflows/') else 'text-gray-600 hover:text-gray-900' }}">Workflows</a>
+
+                <div class="nav-dropdown">
+                    <button class="text-sm flex items-center gap-1 {{ 'text-gray-900 font-medium' if request.url.path.startswith('/admin/llm-model') or request.url.path.startswith('/admin/stt-model') else 'text-gray-600 hover:text-gray-900' }}" onclick="toggleDropdown(this)">
+                        Models
+                        <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+                    </button>
+                    <div class="nav-dropdown-menu">
+                        <a href="/admin/llm-models">LLM Models</a>
+                        <a href="/admin/stt-models">STT Models</a>
+                    </div>
+                </div>
+
+                <div class="nav-dropdown">
+                    <button class="text-sm flex items-center gap-1 {{ 'text-gray-900 font-medium' if request.url.path.startswith('/admin/tool') or request.url.path.startswith('/admin/categor') or request.url.path.startswith('/admin/import') or request.url.path.startswith('/admin/api/export') else 'text-gray-600 hover:text-gray-900' }}" onclick="toggleDropdown(this)">
+                        Config
+                        <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+                    </button>
+                    <div class="nav-dropdown-menu">
+                        <a href="/admin/tools">Tools</a>
+                        <a href="/admin/categories">Categories</a>
+                        <a href="/admin/import">Import / Export</a>
+                    </div>
+                </div>
+
+                <div class="nav-dropdown">
+                    <button class="text-sm text-gray-600 hover:text-gray-900" onclick="toggleDropdown(this)" title="More">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.5" fill="currentColor"/><circle cx="12" cy="12" r="1.5" fill="currentColor"/><circle cx="19" cy="12" r="1.5" fill="currentColor"/></svg>
+                    </button>
+                    <div class="nav-dropdown-menu" style="right: 0; left: auto;">
+                        <a href="/admin/demo">Demo</a>
+                        <a href="/admin/about">About</a>
+                    </div>
+                </div>
+
                 <a href="/admin/workflows/new" class="text-sm bg-blue-600 text-white px-3 py-1.5 rounded-lg hover:bg-blue-700 transition">
                     + New Workflow
                 </a>
@@ -55,6 +87,20 @@
     <main class="max-w-5xl mx-auto px-4 py-6">
         {% block content %}{% endblock %}
     </main>
+
+    <script>
+    function toggleDropdown(btn) {
+        var dd = btn.closest('.nav-dropdown');
+        var wasOpen = dd.classList.contains('open');
+        document.querySelectorAll('.nav-dropdown.open').forEach(function(el) { el.classList.remove('open'); });
+        if (!wasOpen) dd.classList.add('open');
+    }
+    document.addEventListener('click', function(e) {
+        if (!e.target.closest('.nav-dropdown')) {
+            document.querySelectorAll('.nav-dropdown.open').forEach(function(el) { el.classList.remove('open'); });
+        }
+    });
+    </script>
 
     {% if flash_message %}
     <script>

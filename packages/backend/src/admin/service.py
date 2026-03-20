@@ -281,16 +281,28 @@ async def get_workflow_stats(db: AsyncSession) -> dict[str, Any]:
     )
     executions = await db.execute(select(func.count(ExecutionLog.id)))
     llm_models = await db.execute(select(func.count(LLMModel.id)))
+    active_llm = await db.execute(
+        select(func.count(LLMModel.id)).where(LLMModel.is_active == True)
+    )
     stt_models = await db.execute(select(func.count(STTModel.id)))
+    active_stt = await db.execute(
+        select(func.count(STTModel.id)).where(STTModel.is_active == True)
+    )
     tools = await db.execute(select(func.count(Tool.id)))
+    active_tools = await db.execute(
+        select(func.count(Tool.id)).where(Tool.is_active == True)
+    )
 
     return {
         "total_workflows": total.scalar() or 0,
         "active_workflows": active.scalar() or 0,
         "total_executions": executions.scalar() or 0,
         "llm_models": llm_models.scalar() or 0,
+        "active_llm_models": active_llm.scalar() or 0,
         "stt_models": stt_models.scalar() or 0,
+        "active_stt_models": active_stt.scalar() or 0,
         "tools": tools.scalar() or 0,
+        "active_tools": active_tools.scalar() or 0,
     }
 
 
