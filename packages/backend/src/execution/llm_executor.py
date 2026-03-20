@@ -8,6 +8,7 @@ from uuid import UUID
 import httpx
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from src.crypto import decrypt_api_key
 from src.db.models import ExecutionLog, LLMModel, Workflow
 from src.execution.log_helper import finish_log
 from src.execution.template import render_prompt
@@ -28,6 +29,7 @@ def _build_request(llm_model: LLMModel, prompt: str, temperature: float) -> tupl
     endpoint = llm_model.endpoint_execute.rstrip("/")
     url = f"{base_url}{endpoint}"
     api_format = get_api_format(llm_model.provider_type)
+    api_key = decrypt_api_key(llm_model.api_key)
 
     headers: dict[str, str] = {"Content-Type": "application/json"}
 
@@ -48,8 +50,8 @@ def _build_request(llm_model: LLMModel, prompt: str, temperature: float) -> tupl
             "temperature": temperature,
         }
         response_path = "content[0].text"
-        if llm_model.api_key:
-            headers["x-api-key"] = llm_model.api_key
+        if api_key:
+            headers["x-api-key"] = api_key
             headers["anthropic-version"] = "2023-06-01"
 
     else:
@@ -61,8 +63,8 @@ def _build_request(llm_model: LLMModel, prompt: str, temperature: float) -> tupl
             "stream": False,
         }
         response_path = "choices[0].message.content"
-        if llm_model.api_key:
-            headers["Authorization"] = f"Bearer {llm_model.api_key}"
+        if api_key:
+            headers["Authorization"] = f"Bearer {api_key}"
 
     return url, payload, headers, response_path
 
