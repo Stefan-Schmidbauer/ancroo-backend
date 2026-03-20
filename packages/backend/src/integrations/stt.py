@@ -41,6 +41,6 @@ async def list_models(base_url: str) -> list[str]:
             response = await client.get(f"{base_url}/v1/models")
             response.raise_for_status()
             data = response.json()
-            return [m["id"] for m in data.get("data", [])]
+            return sorted([m["id"] for m in data.get("data", [])], key=str.lower)
     except httpx.HTTPError as e:
         raise STTError(f"Failed to list STT models: {e}")

@@ -80,9 +80,10 @@ async def list_models(base_url: str, provider_type: str,
             data = response.json()
 
         if api_format == "ollama":
-            return [m["name"] for m in data.get("models", [])]
+            models = [m["name"] for m in data.get("models", [])]
         else:
             # Both Anthropic and OpenAI use {"data": [{"id": "..."}]}
-            return [m["id"] for m in data.get("data", [])]
+            models = [m["id"] for m in data.get("data", [])]
+        return sorted(models, key=str.lower)
     except httpx.HTTPError as e:
         raise LLMError(f"Failed to list models: {e}")
