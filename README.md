@@ -81,11 +81,10 @@ This symlinks the module directory into `modules/ancroo-backend/` and optionally
 **Manual enable (if you skipped it during install):**
 
 ```bash
-cd /path/to/ancroo-stack
-./module.sh enable ancroo-backend
+bash /path/to/ancroo-backend/install-stack.sh /path/to/ancroo-stack
 ```
 
-**What happens during enable:**
+**What happens during install:**
 
 1. Environment variables are added to `.env` (ports, database, service URLs)
 2. `ANCROO_SECRET_KEY` is auto-generated
@@ -96,8 +95,8 @@ cd /path/to/ancroo-stack
 
 **Post-installation:**
 
-Example workflows are imported via the admin API — either by the meta-installer
-(`ancroo/install.sh`) or manually through the admin GUI (**Admin → Import
+Example workflows are imported via the admin API — either by the stack installer
+(`ancroo-stack/install.sh`) or manually through the admin GUI (**Admin → Import
 Workflow**).  Required providers (Ollama, Whisper, n8n) are created
 automatically during import.
 
@@ -114,8 +113,9 @@ curl -X POST http://localhost:8900/admin/api/import \
 
 ```bash
 cd /path/to/ancroo-stack
-./module.sh disable ancroo-backend
-rm -rf modules/ancroo-backend/
+docker compose stop ancroo-backend
+# Remove compose entries from COMPOSE_FILE in .env, then:
+rm -f modules/ancroo-backend
 ```
 
 ---

@@ -1,6 +1,5 @@
-# Build from source when module is cloned into modules/ancroo-backend/.
-# module.sh does NOT auto-load this file.
-# To use: add modules/ancroo-backend/compose.build.yml to COMPOSE_FILE in .env
+# Build from source (dev mode).
+# To use: add ../ancroo-backend/module/compose.build.yml to COMPOSE_FILE in .env
 
 services:
   ancroo-backend:

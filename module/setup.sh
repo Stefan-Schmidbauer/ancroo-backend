@@ -4,8 +4,7 @@
 # Generates ANCROO_SECRET_KEY automatically if not yet configured,
 # then configures the n8n API key for workflow integration.
 #
-# This script can be re-run at any time via:
-#   ./module.sh setup ancroo-backend
+# This script is sourced by install-stack.sh during installation.
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -95,13 +94,13 @@ else
 fi
 
 # --- Whisper-ROCm Auto-Detection ---
-# When the whisper-rocm module is enabled, automatically set the ROCm STT URL
+# When the STT engine is whisper-rocm, automatically set the ROCm STT URL
 # so the ancroo-backend container can discover and prefer the GPU provider.
 
-enabled_modules_for_rocm=$(get_env_value "ENABLED_MODULES")
+stt_engine_for_rocm=$(get_env_value "STT_ENGINE")
 current_rocm_url=$(get_env_value "ANCROO_WHISPER_ROCM_URL")
 
-if echo "$enabled_modules_for_rocm" | grep -qw "whisper-rocm"; then
+if [[ "$stt_engine_for_rocm" == "whisper-rocm" ]]; then
     if [[ -z "$current_rocm_url" ]]; then
         set_env_value "ANCROO_WHISPER_ROCM_URL" "http://whisper-rocm:8000"
         print_success "Whisper-ROCm detected — ANCROO_WHISPER_ROCM_URL set automatically"
@@ -128,8 +127,8 @@ else
         print_success "n8n API key already configured"
     else
         print_warning "n8n API key not found"
-        echo "  Enable the n8n module first (creates the key automatically),"
-        echo "  then re-run: ./module.sh setup ancroo-backend"
+        echo "  Run the n8n provisioning script first:"
+        echo "  bash tools/install/lib/n8n-provision.sh /path/to/ancroo-stack"
     fi
 fi
 
