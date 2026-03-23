@@ -87,10 +87,9 @@ def _build_recipe(sources: list[str], form_fields: list | None = None,
 async def home(request: Request, db: DbSession):
     """Home page with stats and quick links."""
     stats = await service.get_workflow_stats(db)
-    return templates.TemplateResponse("home.html", {
-        "request": request,
+    return templates.TemplateResponse(request, "home.html", context={
         "stats": stats,
-        **get_version_info(),
+        **get_version_info()
     })
 
 
@@ -100,10 +99,9 @@ async def home(request: Request, db: DbSession):
 async def workflows_page(request: Request, db: DbSession):
     """Workflow list page."""
     workflows = await service.list_workflows(db)
-    return templates.TemplateResponse("dashboard.html", {
-        "request": request,
+    return templates.TemplateResponse(request, "dashboard.html", context={
         "workflows": workflows,
-        **_flash_context(request),
+        **_flash_context(request)
     })
 
 
@@ -112,9 +110,7 @@ async def workflows_page(request: Request, db: DbSession):
 @router.get("/workflows/new", response_class=HTMLResponse)
 async def new_workflow_form(request: Request):
     """Show workflow creation wizard — step 1: choose type."""
-    return templates.TemplateResponse("workflow_wizard.html", {
-        "request": request,
-    })
+    return templates.TemplateResponse(request, "workflow_wizard.html", context={})
 
 
 @router.get("/workflows/new/form", response_class=HTMLResponse)
@@ -145,14 +141,13 @@ async def workflow_type_form(request: Request, db: DbSession, type: str = "text_
         tools = list(result.scalars().all())
         template = "partials/workflow_type_tool.html"
 
-    return templates.TemplateResponse(template, {
-        "request": request,
+    return templates.TemplateResponse(request, template, context={
         "llm_models": llm_models,
         "stt_models": stt_models,
         "tools": tools,
         "categories": categories,
         "edit_mode": False,
-        "workflow": None,
+        "workflow": None
     })
 
 
@@ -248,7 +243,7 @@ async def create_workflow_route(
 @router.get("/import", response_class=HTMLResponse)
 async def import_page(request: Request):
     """Import / Export page."""
-    return templates.TemplateResponse("import.html", {"request": request})
+    return templates.TemplateResponse(request, "import.html", context={})
 
 
 @router.post("/api/import")
@@ -263,10 +258,9 @@ async def api_import(request: Request, db: DbSession):
     except Exception:
         result = importer.ImportResult(status="error", entity_type="unknown", message="Invalid JSON body")
         if request.headers.get("HX-Request"):
-            return templates.TemplateResponse(
-                "partials/import_result.html",
-                {"request": request, "results": [result]},
-            )
+            return templates.TemplateResponse(request, "partials/import_result.html", context={
+                "results": [result]
+            })
         return JSONResponse(result.to_dict(), status_code=400)
 
     result = await importer.import_item(db, data)
@@ -279,10 +273,9 @@ async def api_import(request: Request, db: DbSession):
         results = [result]
 
     if request.headers.get("HX-Request"):
-        return templates.TemplateResponse(
-            "partials/import_result.html",
-            {"request": request, "results": results},
-        )
+        return templates.TemplateResponse(request, "partials/import_result.html", context={
+            "results": results
+        })
 
     has_error = any(r.status == "error" for r in results)
     status_code = 400 if has_error else 200
@@ -393,11 +386,10 @@ async def workflow_detail(request: Request, slug: str, db: DbSession):
 
     executions = await service.get_recent_executions(db, workflow.id)
 
-    return templates.TemplateResponse("workflow_detail.html", {
-        "request": request,
+    return templates.TemplateResponse(request, "workflow_detail.html", context={
         "workflow": workflow,
         "executions": executions,
-        **_flash_context(request),
+        **_flash_context(request)
     })
 
 
@@ -443,14 +435,13 @@ async def edit_workflow_form(request: Request, slug: str, db: DbSession):
         )
         tools = list(result.scalars().all())
 
-    return templates.TemplateResponse("workflow_edit.html", {
-        "request": request,
+    return templates.TemplateResponse(request, "workflow_edit.html", context={
         "workflow": workflow,
         "llm_models": llm_models,
         "stt_models": stt_models,
         "tools": tools,
         "categories": categories,
-        "edit_mode": True,
+        "edit_mode": True
     })
 
 
@@ -576,9 +567,8 @@ async def toggle_workflow_active(request: Request, slug: str, db: DbSession):
 
     await service.update_workflow(db, slug, is_active=not workflow.is_active)
 
-    return templates.TemplateResponse("partials/toggle_active.html", {
-        "request": request,
-        "workflow": workflow,
+    return templates.TemplateResponse(request, "partials/toggle_active.html", context={
+        "workflow": workflow
     })
 
 
@@ -596,20 +586,18 @@ async def tools_list(request: Request, db: DbSession):
         select(Tool).options(selectinload(Tool.workflows)).order_by(Tool.name)
     )
     tools = list(result.scalars().all())
-    return templates.TemplateResponse("tools.html", {
-        "request": request,
+    return templates.TemplateResponse(request, "tools.html", context={
         "tools": tools,
-        **_flash_context(request),
+        **_flash_context(request)
     })
 
 
 @router.get("/tools/new", response_class=HTMLResponse)
 async def new_tool_form(request: Request):
     """Show create tool form."""
-    return templates.TemplateResponse("tool_form.html", {
-        "request": request,
+    return templates.TemplateResponse(request, "tool_form.html", context={
         "tool": None,
-        "edit_mode": False,
+        "edit_mode": False
     })
 
 
@@ -701,11 +689,10 @@ async def tool_detail(request: Request, tool_id: UUID, db: DbSession):
     )
     linked_workflows = list(result.scalars().all())
 
-    return templates.TemplateResponse("tool_detail.html", {
-        "request": request,
+    return templates.TemplateResponse(request, "tool_detail.html", context={
         "tool": tool,
         "linked_workflows": linked_workflows,
-        **_flash_context(request),
+        **_flash_context(request)
     })
 
 
@@ -716,10 +703,9 @@ async def edit_tool_form(request: Request, tool_id: UUID, db: DbSession):
     if not tool:
         raise HTTPException(status_code=404, detail="Tool not found")
 
-    return templates.TemplateResponse("tool_form.html", {
-        "request": request,
+    return templates.TemplateResponse(request, "tool_form.html", context={
         "tool": tool,
-        "edit_mode": True,
+        "edit_mode": True
     })
 
 
@@ -834,9 +820,8 @@ async def toggle_tool_active(request: Request, tool_id: UUID, db: DbSession):
     tool.is_active = not tool.is_active
     await db.commit()
 
-    return templates.TemplateResponse("partials/toggle_active_tool.html", {
-        "request": request,
-        "tool": tool,
+    return templates.TemplateResponse(request, "partials/toggle_active_tool.html", context={
+        "tool": tool
     })
 
 
@@ -848,8 +833,8 @@ async def tool_health_check(request: Request, tool_id: UUID, db: DbSession):
 
     tool = await db.get(Tool, tool_id)
     if not tool:
-        return templates.TemplateResponse("partials/health_result.html", {
-            "request": request, "healthy": False, "message": "Tool not found",
+        return templates.TemplateResponse(request, "partials/health_result.html", context={
+            "healthy": False, "message": "Tool not found"
         })
 
     try:
@@ -862,19 +847,17 @@ async def tool_health_check(request: Request, tool_id: UUID, db: DbSession):
         tool.health_status = "healthy" if healthy else "unhealthy"
         tool.last_health_check = datetime.now(timezone.utc)
         await db.flush()
-        return templates.TemplateResponse("partials/health_result.html", {
-            "request": request,
+        return templates.TemplateResponse(request, "partials/health_result.html", context={
             "healthy": healthy,
-            "message": "" if healthy else f"HTTP {resp.status_code}",
+            "message": "" if healthy else f"HTTP {resp.status_code}"
         })
     except Exception as e:
         tool.health_status = "unhealthy"
         tool.last_health_check = datetime.now(timezone.utc)
         await db.flush()
-        return templates.TemplateResponse("partials/health_result.html", {
-            "request": request,
+        return templates.TemplateResponse(request, "partials/health_result.html", context={
             "healthy": False,
-            "message": str(e),
+            "message": str(e)
         })
 
 
@@ -911,11 +894,10 @@ async def llm_models_list(request: Request, db: DbSession):
         select(LLMModel).options(selectinload(LLMModel.workflows)).order_by(LLMModel.name)
     )
     llm_models = list(result.scalars().all())
-    return templates.TemplateResponse("llm_models.html", {
-        "request": request,
+    return templates.TemplateResponse(request, "llm_models.html", context={
         "models": llm_models,
         "providers_by_key": LLM_PROVIDERS_BY_KEY,
-        **_flash_context(request),
+        **_flash_context(request)
     })
 
 
@@ -923,11 +905,10 @@ async def llm_models_list(request: Request, db: DbSession):
 async def new_llm_model_form(request: Request):
     """Show create LLM model form."""
     from src.integrations.llm_providers import LLM_PROVIDERS
-    return templates.TemplateResponse("llm_model_form.html", {
-        "request": request,
+    return templates.TemplateResponse(request, "llm_model_form.html", context={
         "model": None,
         "edit_mode": False,
-        "providers": LLM_PROVIDERS,
+        "providers": LLM_PROVIDERS
     })
 
 
@@ -1014,12 +995,11 @@ async def llm_model_detail(request: Request, model_id: UUID, db: DbSession):
     )
     linked_workflows = list(result.scalars().all())
 
-    return templates.TemplateResponse("llm_model_detail.html", {
-        "request": request,
+    return templates.TemplateResponse(request, "llm_model_detail.html", context={
         "model": llm_model,
         "linked_workflows": linked_workflows,
         "providers_by_key": LLM_PROVIDERS_BY_KEY,
-        **_flash_context(request),
+        **_flash_context(request)
     })
 
 
@@ -1030,11 +1010,10 @@ async def edit_llm_model_form(request: Request, model_id: UUID, db: DbSession):
     llm_model = await db.get(LLMModel, model_id)
     if not llm_model:
         raise HTTPException(status_code=404, detail="LLM model not found")
-    return templates.TemplateResponse("llm_model_form.html", {
-        "request": request,
+    return templates.TemplateResponse(request, "llm_model_form.html", context={
         "model": llm_model,
         "edit_mode": True,
-        "providers": LLM_PROVIDERS,
+        "providers": LLM_PROVIDERS
     })
 
 
@@ -1121,9 +1100,8 @@ async def toggle_llm_model_active(request: Request, model_id: UUID, db: DbSessio
     llm_model.is_active = not llm_model.is_active
     await db.commit()
 
-    return templates.TemplateResponse("partials/toggle_active_llm.html", {
-        "request": request,
-        "model": llm_model,
+    return templates.TemplateResponse(request, "partials/toggle_active_llm.html", context={
+        "model": llm_model
     })
 
 
@@ -1133,17 +1111,16 @@ async def llm_model_health_check(request: Request, model_id: UUID, db: DbSession
     from datetime import datetime, timezone
     llm_model = await db.get(LLMModel, model_id)
     if not llm_model:
-        return templates.TemplateResponse("partials/health_result.html", {
-            "request": request, "healthy": False, "message": "LLM model not found",
+        return templates.TemplateResponse(request, "partials/health_result.html", context={
+            "healthy": False, "message": "LLM model not found"
         })
     result = await check_llm_health(llm_model)
     llm_model.health_status = "healthy" if result.get("healthy") else "unhealthy"
     llm_model.last_health_check = datetime.now(timezone.utc)
     await db.flush()
-    return templates.TemplateResponse("partials/health_result.html", {
-        "request": request,
+    return templates.TemplateResponse(request, "partials/health_result.html", context={
         "healthy": result.get("healthy", False),
-        "message": result.get("error", ""),
+        "message": result.get("error", "")
     })
 
 
@@ -1161,10 +1138,9 @@ async def llm_model_discover_models(request: Request, model_id: UUID, db: DbSess
         return HTMLResponse(
             f'<p class="text-xs text-red-600">Failed to load models: {e}</p>'
         )
-    return templates.TemplateResponse("partials/llm_models.html", {
-        "request": request,
+    return templates.TemplateResponse(request, "partials/llm_models.html", context={
         "models": models,
-        "model_id": model_id,
+        "model_id": model_id
     })
 
 
@@ -1180,20 +1156,18 @@ async def stt_models_list(request: Request, db: DbSession):
         select(STTModel).options(selectinload(STTModel.workflows)).order_by(STTModel.name)
     )
     stt_models = list(result.scalars().all())
-    return templates.TemplateResponse("stt_models.html", {
-        "request": request,
+    return templates.TemplateResponse(request, "stt_models.html", context={
         "models": stt_models,
-        **_flash_context(request),
+        **_flash_context(request)
     })
 
 
 @router.get("/stt-models/new", response_class=HTMLResponse)
 async def new_stt_model_form(request: Request):
     """Show create STT model form."""
-    return templates.TemplateResponse("stt_model_form.html", {
-        "request": request,
+    return templates.TemplateResponse(request, "stt_model_form.html", context={
         "model": None,
-        "edit_mode": False,
+        "edit_mode": False
     })
 
 
@@ -1249,11 +1223,10 @@ async def stt_model_detail(request: Request, model_id: UUID, db: DbSession):
     )
     linked_workflows = list(result.scalars().all())
 
-    return templates.TemplateResponse("stt_model_detail.html", {
-        "request": request,
+    return templates.TemplateResponse(request, "stt_model_detail.html", context={
         "model": stt_model,
         "linked_workflows": linked_workflows,
-        **_flash_context(request),
+        **_flash_context(request)
     })
 
 
@@ -1263,10 +1236,9 @@ async def edit_stt_model_form(request: Request, model_id: UUID, db: DbSession):
     stt_model = await db.get(STTModel, model_id)
     if not stt_model:
         raise HTTPException(status_code=404, detail="STT model not found")
-    return templates.TemplateResponse("stt_model_form.html", {
-        "request": request,
+    return templates.TemplateResponse(request, "stt_model_form.html", context={
         "model": stt_model,
-        "edit_mode": True,
+        "edit_mode": True
     })
 
 
@@ -1351,9 +1323,8 @@ async def toggle_stt_model_active(request: Request, model_id: UUID, db: DbSessio
     stt_model.is_active = not stt_model.is_active
     await db.commit()
 
-    return templates.TemplateResponse("partials/toggle_active_stt.html", {
-        "request": request,
-        "model": stt_model,
+    return templates.TemplateResponse(request, "partials/toggle_active_stt.html", context={
+        "model": stt_model
     })
 
 
@@ -1363,17 +1334,16 @@ async def stt_model_health_check(request: Request, model_id: UUID, db: DbSession
     from datetime import datetime, timezone
     stt_model = await db.get(STTModel, model_id)
     if not stt_model:
-        return templates.TemplateResponse("partials/health_result.html", {
-            "request": request, "healthy": False, "message": "STT model not found",
+        return templates.TemplateResponse(request, "partials/health_result.html", context={
+            "healthy": False, "message": "STT model not found"
         })
     result = await check_stt_health(stt_model)
     stt_model.health_status = "healthy" if result.get("healthy") else "unhealthy"
     stt_model.last_health_check = datetime.now(timezone.utc)
     await db.flush()
-    return templates.TemplateResponse("partials/health_result.html", {
-        "request": request,
+    return templates.TemplateResponse(request, "partials/health_result.html", context={
         "healthy": result.get("healthy", False),
-        "message": result.get("error", ""),
+        "message": result.get("error", "")
     })
 
 
@@ -1389,10 +1359,9 @@ async def stt_model_discover_models(request: Request, model_id: UUID, db: DbSess
         return HTMLResponse(
             f'<p class="text-xs text-red-600">Failed to load models: {e}</p>'
         )
-    return templates.TemplateResponse("partials/stt_models.html", {
-        "request": request,
+    return templates.TemplateResponse(request, "partials/stt_models.html", context={
         "models": models,
-        "model_id": model_id,
+        "model_id": model_id
     })
 
 
@@ -1403,20 +1372,18 @@ async def stt_model_discover_models(request: Request, model_id: UUID, db: DbSess
 async def categories_list(request: Request, db: DbSession):
     """List all categories."""
     categories = await service.list_categories(db)
-    return templates.TemplateResponse("categories.html", {
-        "request": request,
+    return templates.TemplateResponse(request, "categories.html", context={
         "categories": categories,
-        **_flash_context(request),
+        **_flash_context(request)
     })
 
 
 @router.get("/categories/new", response_class=HTMLResponse)
 async def new_category_form(request: Request):
     """Show category creation form."""
-    return templates.TemplateResponse("category_form.html", {
-        "request": request,
+    return templates.TemplateResponse(request, "category_form.html", context={
         "category": None,
-        "edit_mode": False,
+        "edit_mode": False
     })
 
 
@@ -1425,12 +1392,11 @@ async def create_category(request: Request, db: DbSession, name: str = Form(...)
     """Create a new category."""
     existing = await service.get_category_by_name(db, name)
     if existing:
-        return templates.TemplateResponse("category_form.html", {
-            "request": request,
+        return templates.TemplateResponse(request, "category_form.html", context={
             "category": None,
             "edit_mode": False,
             "flash_message": f"Category '{name}' already exists.",
-            "flash_type": "error",
+            "flash_type": "error"
         })
     await service.create_category(db, name=name, icon=icon)
     await db.commit()
@@ -1443,10 +1409,9 @@ async def edit_category_form(request: Request, category_id: UUID, db: DbSession)
     category = await service.get_category(db, category_id)
     if not category:
         raise HTTPException(status_code=404, detail="Category not found")
-    return templates.TemplateResponse("category_form.html", {
-        "request": request,
+    return templates.TemplateResponse(request, "category_form.html", context={
         "category": category,
-        "edit_mode": True,
+        "edit_mode": True
     })
 
 
@@ -1469,11 +1434,10 @@ async def delete_category_route(request: Request, category_id: UUID, db: DbSessi
     success, message = await service.delete_category(db, category_id)
     if not success:
         categories = await service.list_categories(db)
-        return templates.TemplateResponse("categories.html", {
-            "request": request,
+        return templates.TemplateResponse(request, "categories.html", context={
             "categories": categories,
             "flash_message": message,
-            "flash_type": "error",
+            "flash_type": "error"
         })
     await db.commit()
     return RedirectResponse("/admin/categories?flash=deleted", status_code=303)
@@ -1485,13 +1449,12 @@ async def delete_category_route(request: Request, category_id: UUID, db: DbSessi
 @router.get("/demo", response_class=HTMLResponse)
 async def demo_page(request: Request):
     """Demo page for testing text transformation workflows."""
-    return templates.TemplateResponse("demo.html", {"request": request})
+    return templates.TemplateResponse(request, "demo.html", context={})
 
 
 @router.get("/about", response_class=HTMLResponse)
 async def about_page(request: Request):
     """About page showing version and build information."""
-    return templates.TemplateResponse("about.html", {
-        "request": request,
-        **get_version_info(),
+    return templates.TemplateResponse(request, "about.html", context={
+        **get_version_info()
     })
