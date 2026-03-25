@@ -375,7 +375,7 @@ class Workflow(Base):
     # Demo page URL (relative path, served from static /demos mount)
     demo_url: Mapped[Optional[str]] = mapped_column(
         String(255), nullable=True,
-        comment="Relative path to demo page, e.g. 'demo.html'. Served at /demos/{slug}/{path}"
+        comment="Relative path to demo page, e.g. 'grammar-fix/demo.html'. Served at /demos/{path}"
     )
 
     # === Metadata ===

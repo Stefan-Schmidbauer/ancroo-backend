@@ -403,7 +403,7 @@ async def workflow_demo(request: Request, slug: str, db: DbSession):
     if not workflow.demo_url:
         raise HTTPException(status_code=404, detail="No demo page configured for this workflow")
 
-    return RedirectResponse(url=f"/demos/{slug}/{workflow.demo_url}")
+    return RedirectResponse(url=f"/demos/{workflow.demo_url}")
 
 
 @router.get("/workflows/{slug}/edit", response_class=HTMLResponse)
