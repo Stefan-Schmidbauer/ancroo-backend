@@ -217,7 +217,7 @@ AGPLv3 — see [LICENSE](LICENSE). The Ancroo name is not covered by this licens
 
 ## Author
 
-**Stefan Schmidbauer** — [GitHub](https://github.com/Stefan-Schmidbauer)
+**Stefan Schmidbauer** — [GitHub](https://github.com/Stefan-Schmidbauer) · [stefan@ancroo.com](mailto:stefan@ancroo.com)
 
 ---
 
