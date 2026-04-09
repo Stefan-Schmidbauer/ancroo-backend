@@ -38,14 +38,25 @@
     </div>
 
     <div>
-        {% set _temp = workflow.temperature if workflow and workflow.temperature is not none else 0.7 %}
-        <label class="block text-sm text-gray-600 mb-1">
-            Temperature: <span id="temp-display">{{ _temp }}</span>
-        </label>
-        <input type="range" name="temperature" min="0" max="2" step="0.1"
+        {% set _has_custom_temp = workflow and workflow.temperature is not none %}
+        {% set _temp = workflow.temperature if _has_custom_temp else 0.7 %}
+        <div class="flex items-center gap-2 mb-1">
+            <input type="checkbox" id="custom-temp-toggle"
+                {{ 'checked' if _has_custom_temp }}
+                onchange="toggleCustomTemp(this.checked)"
+                class="rounded border-gray-300 text-blue-500 focus:ring-blue-500">
+            <label for="custom-temp-toggle" class="text-sm text-gray-600 cursor-pointer">
+                Custom temperature: <span id="temp-display">{{ _temp }}</span>
+            </label>
+        </div>
+        <p id="model-default-hint" class="text-xs text-blue-500 mb-1 {{ 'hidden' if _has_custom_temp }}">
+            Using model default temperature
+        </p>
+        <input type="range" id="temp-slider" name="temperature" min="0" max="2" step="0.1"
             value="{{ _temp }}"
+            {{ '' if _has_custom_temp else 'disabled' }}
             oninput="document.getElementById('temp-display').textContent = this.value"
-            class="w-full">
+            class="w-full {{ '' if _has_custom_temp else 'opacity-40' }}">
         <div class="flex justify-between text-xs text-gray-400 mt-1">
             <span>0.0 — Deterministic</span>
             <span>0.7 — Standard</span>
@@ -53,9 +64,28 @@
         </div>
         <p class="text-xs text-gray-400 mt-1">
             Low values produce consistent, predictable output. High values produce more varied, creative output.
-            Most LLMs default to 0.7. Use lower values (0.1–0.3) for corrections and translations.
+            When unchecked, the model's default temperature is used.
         </p>
     </div>
+
+    <script>
+    function toggleCustomTemp(enabled) {
+        const slider = document.getElementById('temp-slider');
+        const hint = document.getElementById('model-default-hint');
+        slider.disabled = !enabled;
+        slider.classList.toggle('opacity-40', !enabled);
+        hint.classList.toggle('hidden', enabled);
+        if (!enabled) {
+            slider.removeAttribute('name');
+        } else {
+            slider.setAttribute('name', 'temperature');
+        }
+    }
+    // Initialize on load
+    document.addEventListener('DOMContentLoaded', function() {
+        toggleCustomTemp(document.getElementById('custom-temp-toggle').checked);
+    });
+    </script>
 </div>
 
 <!-- Output Configuration -->

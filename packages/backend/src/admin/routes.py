@@ -2,7 +2,7 @@
 
 import json
 from pathlib import Path
-from typing import Annotated
+from typing import Annotated, Optional
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, File, Form, Query, Request, HTTPException, UploadFile
@@ -161,7 +161,7 @@ async def create_workflow_route(
     # Text-Transformation fields
     llm_model_id: str = Form(""),
     prompt_template: str = Form(""),
-    temperature: float = Form(0.7),
+    temperature: Optional[float] = Form(None),
     # Speech-to-Text fields
     stt_model_id: str = Form(""),
     # Tool / Trigger fields
@@ -458,7 +458,7 @@ async def update_workflow(
     workflow_type: str = Form(""),
     # Text-Transformation fields
     prompt_template: str = Form(""),
-    temperature: float = Form(0.7),
+    temperature: Optional[float] = Form(None),
     default_hotkey: str = Form(""),
     timeout_seconds: int = Form(60),
     # Model / Tool FK fields
@@ -1449,7 +1449,15 @@ async def delete_category_route(request: Request, category_id: UUID, db: DbSessi
 @router.get("/demo", response_class=HTMLResponse)
 async def demo_page(request: Request):
     """Demo page for testing text transformation workflows."""
-    return templates.TemplateResponse(request, "demo.html", context={})
+    settings = get_settings()
+    custom_demos = []
+    if settings.workflows_dir:
+        demos_path = Path(settings.workflows_dir)
+        if demos_path.is_dir():
+            for f in sorted(demos_path.glob("demo-*.html")):
+                label = f.stem.replace("demo-", "").replace("-", " ").title()
+                custom_demos.append({"name": label, "url": f"/demos/{f.name}"})
+    return templates.TemplateResponse(request, "demo.html", context={"custom_demos": custom_demos})
 
 
 @router.get("/about", response_class=HTMLResponse)
