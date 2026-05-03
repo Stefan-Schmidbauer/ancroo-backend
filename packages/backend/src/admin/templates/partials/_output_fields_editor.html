@@ -37,6 +37,7 @@
     function updateOutputField(i, key, value) {
         outputFields[i][key] = value;
         document.getElementById('output-fields-json').value = JSON.stringify(outputFields);
+        if (key === 'selector') renderOutputFields();
     }
     window.updateOutputField = updateOutputField;
 
@@ -48,17 +49,33 @@
             .replace(/>/g, '&gt;');
     }
 
+    // Mirrors ancroo-web src/content/index.ts isAllowedSelector. Update both together.
+    var SELECTOR_BLOCKED_BARE_PARTS = ['*', 'html', 'body', 'head', ':root'];
+    function isSelectorBlocked(value) {
+        if (!value) return false;
+        var parts = String(value).split(',').map(function(p) { return p.trim(); }).filter(function(p) { return p !== ''; });
+        if (parts.length === 0) return false;
+        return parts.some(function(p) { return SELECTOR_BLOCKED_BARE_PARTS.indexOf(p) !== -1; });
+    }
+
     function renderOutputFields() {
         var container = document.getElementById('output-fields-container');
         if (outputFields.length === 0) {
             container.innerHTML = '<div class="text-xs text-gray-400 py-2">No output fields defined yet.</div>';
         } else {
             container.innerHTML = outputFields.map(function(f, i) {
+                var blocked = isSelectorBlocked(f.selector);
+                var selectorClass = blocked
+                    ? 'flex-1 border border-red-400 rounded px-2 py-1.5 text-sm font-mono bg-red-50'
+                    : 'flex-1 border rounded px-2 py-1.5 text-sm font-mono';
+                var title = blocked
+                    ? 'Blocked by extension: bare *, html, body, head, or :root selectors are rejected'
+                    : '';
                 return '<div class="flex gap-2 mb-2 items-center">' +
                     '<input type="text" value="' + escapeHtml(f.name) + '" onchange="updateOutputField(' + i + ', \'name\', this.value)" ' +
                         'class="flex-1 border rounded px-2 py-1.5 text-sm" placeholder="Field name">' +
                     '<input type="text" value="' + escapeHtml(f.selector) + '" onchange="updateOutputField(' + i + ', \'selector\', this.value)" ' +
-                        'class="flex-1 border rounded px-2 py-1.5 text-sm font-mono" placeholder="CSS selector">' +
+                        'class="' + selectorClass + '" placeholder="CSS selector" title="' + escapeHtml(title) + '">' +
                     '<button type="button" onclick="removeOutputField(' + i + ')" class="text-red-400 hover:text-red-600 px-1">&times;</button>' +
                 '</div>';
             }).join('');
