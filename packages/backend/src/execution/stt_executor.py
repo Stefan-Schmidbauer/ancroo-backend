@@ -68,7 +68,7 @@ async def execute_stt_workflow(
 
     start_time = datetime.now(timezone.utc)
     url = f"{stt_model.base_url.rstrip('/')}/v1/audio/transcriptions"
-    timeout = float(workflow.timeout_seconds)
+    timeout = float(workflow.timeout_seconds or 60)
 
     try:
         # Build multipart form data

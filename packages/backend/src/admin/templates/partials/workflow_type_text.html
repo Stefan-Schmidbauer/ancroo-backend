@@ -16,7 +16,7 @@
             <option value="">— Select LLM Model —</option>
             {% for model in llm_models %}
             <option value="{{ model.id }}" {{ 'selected' if workflow and workflow.llm_model_id == model.id }}>
-                {{ model.name }}{% if model.model_id %} ({{ model.model_id }}){% endif %}
+                {{ model.name }}{% if model.model_id %} ({{ model.model_id }}, T:{{ "%g"|format(model.default_temperature) }}{% if model.context_length is not none %}, ctx:{{ model.context_length }}{% endif %}, to:{{ model.default_timeout_seconds }}s){% endif %}
             </option>
             {% endfor %}
         </select>

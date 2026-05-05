@@ -37,7 +37,15 @@
             <dt class="text-gray-500">Hotkey</dt>
             <dd class="text-gray-900 font-mono text-xs">{{ workflow.default_hotkey or '—' }}</dd>
             <dt class="text-gray-500">Timeout</dt>
-            <dd class="text-gray-900">{{ workflow.timeout_seconds }}s</dd>
+            <dd class="text-gray-900">
+                {% if workflow.timeout_seconds is not none %}
+                    {{ workflow.timeout_seconds }}s
+                {% elif workflow.llm_model %}
+                    {{ workflow.llm_model.default_timeout_seconds }}s <span class="text-xs text-gray-400">(from model)</span>
+                {% else %}
+                    <span class="text-gray-400">—</span>
+                {% endif %}
+            </dd>
         </dl>
     </div>
 
@@ -87,6 +95,11 @@
         {% if workflow.temperature is not none %}
         <div class="mt-2 text-xs text-gray-500">
             Temperature: <span class="text-gray-800 font-mono">{{ workflow.temperature }}</span>
+        </div>
+        {% endif %}
+        {% if workflow.llm_model.context_length is not none %}
+        <div class="mt-1 text-xs text-gray-500">
+            Context length: <span class="text-gray-800 font-mono">{{ workflow.llm_model.context_length }}</span>
         </div>
         {% endif %}
     </div>

@@ -87,3 +87,29 @@ async def list_models(base_url: str, provider_type: str,
         return sorted(models, key=str.lower)
     except httpx.HTTPError as e:
         raise LLMError(f"Failed to list models: {e}")
+
+
+async def get_ollama_model_context_length(base_url: str, model_id: str) -> int | None:
+    """Probe Ollama /api/show for the model's trained context length.
+
+    Returns the value from `<arch>.context_length` in model_info — the GGUF's
+    documented training length, which is a safe default for num_ctx. Returns
+    None if the server is unreachable or the field is missing.
+    """
+    base_url = base_url.rstrip("/")
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            response = await client.post(
+                f"{base_url}/api/show",
+                json={"model": model_id},
+            )
+            response.raise_for_status()
+            data = response.json()
+    except httpx.HTTPError:
+        return None
+
+    model_info = data.get("model_info", {})
+    for key, value in model_info.items():
+        if key.endswith(".context_length") and isinstance(value, int):
+            return value
+    return None

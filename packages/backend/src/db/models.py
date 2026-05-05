@@ -103,6 +103,14 @@ class LLMModel(Base):
         Float, default=0.3,
         comment="Default temperature for generation"
     )
+    context_length: Mapped[Optional[int]] = mapped_column(
+        Integer, nullable=True,
+        comment="Override num_ctx for Ollama. NULL = let provider decide."
+    )
+    default_timeout_seconds: Mapped[int] = mapped_column(
+        Integer, default=120,
+        comment="Default request timeout in seconds. Workflows can override."
+    )
     config: Mapped[Optional[dict]] = mapped_column(
         JSONB, default=dict, server_default="{}",
         comment="Extra provider-specific configuration"
@@ -370,7 +378,10 @@ class Workflow(Base):
     default_hotkey: Mapped[Optional[str]] = mapped_column(
         String(50), comment="e.g., 'Alt+Shift+G'"
     )
-    timeout_seconds: Mapped[int] = mapped_column(Integer, default=60)
+    timeout_seconds: Mapped[Optional[int]] = mapped_column(
+        Integer, nullable=True,
+        comment="Override request timeout. NULL = use llm_model.default_timeout_seconds."
+    )
 
     # Demo page URL (relative path, served from static /demos mount)
     demo_url: Mapped[Optional[str]] = mapped_column(

@@ -62,6 +62,18 @@
         <dl class="grid grid-cols-[8rem_1fr] gap-x-3 gap-y-2 text-sm">
             <dt class="text-gray-500">Default Temp.</dt>
             <dd class="text-gray-900 font-mono">{{ model.default_temperature if model.default_temperature is not none else '—' }}</dd>
+            {% if model.provider_type == 'ollama' %}
+            <dt class="text-gray-500">Context Length</dt>
+            <dd class="text-gray-900 font-mono">
+                {% if model.context_length is not none %}
+                    {{ model.context_length }}
+                {% else %}
+                    <span class="text-gray-400">— (provider default)</span>
+                {% endif %}
+            </dd>
+            {% endif %}
+            <dt class="text-gray-500">Default Timeout</dt>
+            <dd class="text-gray-900 font-mono">{{ model.default_timeout_seconds }}s</dd>
             <dt class="text-gray-500">Created</dt>
             <dd class="text-gray-900 text-xs">{{ model.created_at.strftime('%Y-%m-%d %H:%M') if model.created_at else '—' }}</dd>
         </dl>

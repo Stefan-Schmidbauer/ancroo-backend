@@ -21,6 +21,13 @@
             <div class="flex items-center gap-3">
                 <span class="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded">{{ providers_by_key[model.provider_type].label if model.provider_type in providers_by_key else model.provider_type }}</span>
                 <span class="text-xs font-mono text-gray-500">{{ model.model_id or 'no model set' }}</span>
+                {% if model.default_temperature is not none %}
+                <span class="text-xs font-mono text-gray-400" title="Default temperature">T:{{ "%g"|format(model.default_temperature) }}</span>
+                {% endif %}
+                {% if model.provider_type == 'ollama' and model.context_length is not none %}
+                <span class="text-xs font-mono text-gray-400" title="num_ctx override">ctx:{{ model.context_length }}</span>
+                {% endif %}
+                <span class="text-xs font-mono text-gray-400" title="Default timeout">to:{{ model.default_timeout_seconds }}s</span>
                 {% include "partials/toggle_active_llm.html" %}
                 {% if model.health_status == 'healthy' %}
                 <span class="w-2 h-2 rounded-full bg-green-500" title="Healthy"></span>

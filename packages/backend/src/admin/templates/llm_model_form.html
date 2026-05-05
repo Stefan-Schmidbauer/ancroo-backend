@@ -104,9 +104,31 @@
                     </button>
                 </div>
                 <select id="probe-model-list" class="mt-1 w-full border rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500 hidden"
-                    onchange="if(this.value) document.querySelector('[name={{ 'model_id_field' if edit_mode else 'model_id' }}]').value = this.value">
+                    onchange="if(this.value) { document.querySelector('[name={{ 'model_id_field' if edit_mode else 'model_id' }}]').value = this.value; if (typeof probeContextLength === 'function') probeContextLength(); }">
                 </select>
                 <p class="text-xs text-gray-400 mt-1">The model identifier, e.g. <code>mistral:7b</code>, <code>claude-sonnet-4-20250514</code>, or <code>gpt-4o</code>. Click "Load Models" to discover available models.</p>
+            </div>
+
+            {% set _ctx = model.context_length if model and model.context_length is not none else '' %}
+            <div id="context-length-section" class="mb-3 {{ '' if (model and model.provider_type == 'ollama') or not edit_mode else 'hidden' }}">
+                <label class="block text-sm text-gray-600 mb-1">Context length (num_ctx)</label>
+                <input type="number" name="context_length" id="context-length" min="1"
+                    value="{{ _ctx }}"
+                    class="w-full border rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    placeholder="Leave empty to let provider decide">
+                <p class="text-xs text-gray-400 mt-1" id="context-length-hint">
+                    Sent as <code>options.num_ctx</code> to Ollama. Pick a model above and the trained context length will be filled in.
+                </p>
+            </div>
+
+            <div class="mb-3">
+                <label class="block text-sm text-gray-600 mb-1">Default Timeout (seconds)</label>
+                <input type="number" name="default_timeout_seconds" min="1" max="600" required
+                    value="{{ model.default_timeout_seconds if model and model.default_timeout_seconds is not none else 120 }}"
+                    class="w-full border rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500">
+                <p class="text-xs text-gray-400 mt-1">
+                    Default request timeout for workflows using this model. Workflows can override per-workflow.
+                </p>
             </div>
 
             <div>
@@ -161,6 +183,7 @@
     var endpointExec = document.getElementById('endpoint-execute');
     var endpointModels = document.getElementById('endpoint-models');
     var keyHint = document.getElementById('api-key-hint');
+    var ctxSection = document.getElementById('context-length-section');
 
     sel.addEventListener('change', function() {
         var opt = sel.options[sel.selectedIndex];
@@ -179,8 +202,43 @@
         endpointModels.value = opt.getAttribute('data-default-endpoint-models');
 
         keyHint.textContent = requiresKey ? '(required)' : '(optional)';
+
+        if (ctxSection) {
+            ctxSection.classList.toggle('hidden', sel.value !== 'ollama');
+        }
     });
 })();
 </script>
 {% endif %}
+
+<script>
+async function probeContextLength() {
+    var providerEl = document.querySelector('[name="provider_type"]');
+    var baseUrl = document.getElementById('base-url').value;
+    var modelInput = document.querySelector('[name={{ 'model_id_field' if edit_mode else 'model_id' }}]');
+    var ctxInput = document.getElementById('context-length');
+    var ctxHint = document.getElementById('context-length-hint');
+    if (!providerEl || !baseUrl || !modelInput || !modelInput.value || !ctxInput) return;
+    if (providerEl.value !== 'ollama') return;
+
+    try {
+        var url = '/admin/llm-models/probe-context-length'
+            + '?provider_type=' + encodeURIComponent(providerEl.value)
+            + '&base_url=' + encodeURIComponent(baseUrl)
+            + '&model_id=' + encodeURIComponent(modelInput.value);
+        var resp = await fetch(url);
+        if (!resp.ok) return;
+        var data = await resp.json();
+        if (typeof data.context_length === 'number') {
+            // Cap input to the trained length so the browser blocks higher values.
+            ctxInput.max = String(data.context_length);
+            if (!ctxInput.value) ctxInput.value = String(data.context_length);
+            if (ctxHint) {
+                ctxHint.innerHTML = 'Trained context length: <code>' + data.context_length
+                    + '</code>. Values above this are clamped by the provider and may degrade quality.';
+            }
+        }
+    } catch (e) { /* silent — keep current value */ }
+}
+</script>
 {% endblock %}

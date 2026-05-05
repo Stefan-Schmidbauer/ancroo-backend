@@ -17,7 +17,12 @@ from src.version import get_version_info
 from src.db.session import get_db
 from src.db.models import Category, LLMModel, STTModel, Tool, Workflow
 from src.admin import exporter, importer, service
-from src.integrations.llm import check_health as check_llm_health, list_models as list_llm_models, LLMError
+from src.integrations.llm import (
+    check_health as check_llm_health,
+    list_models as list_llm_models,
+    get_ollama_model_context_length,
+    LLMError,
+)
 from src.integrations.stt import check_health as check_stt_health, list_models as list_stt_models, STTError
 from src.integrations.runner import sync_tools_from_runner, RunnerDiscoveryError
 from src.api.v1.dependencies import get_current_user
@@ -174,7 +179,7 @@ async def create_workflow_route(
     output_action: str = Form("replace_selection"),
     category_id: str = Form(""),
     default_hotkey: str = Form(""),
-    timeout_seconds: int = Form(60),
+    timeout_seconds: str = Form(""),
 ):
     """Create a new workflow from wizard form data."""
     user = await get_current_user(request, db)
@@ -225,7 +230,7 @@ async def create_workflow_route(
         recipe=recipe,
         output_action=output_action,
         default_hotkey=default_hotkey or None,
-        timeout_seconds=timeout_seconds,
+        timeout_seconds=int(timeout_seconds) if timeout_seconds.strip() else None,
         created_by=user.id,
         llm_model_id=parsed_llm_model_id,
         prompt_template=prompt_template or None,
@@ -460,7 +465,7 @@ async def update_workflow(
     prompt_template: str = Form(""),
     temperature: Optional[float] = Form(None),
     default_hotkey: str = Form(""),
-    timeout_seconds: int = Form(60),
+    timeout_seconds: str = Form(""),
     # Model / Tool FK fields
     llm_model_id: str = Form(""),
     stt_model_id: str = Form(""),
@@ -517,7 +522,7 @@ async def update_workflow(
         recipe=recipe,
         output_action=output_action,
         default_hotkey=default_hotkey or None,
-        timeout_seconds=timeout_seconds,
+        timeout_seconds=int(timeout_seconds) if timeout_seconds.strip() else None,
         is_active=is_active == "on",
         prompt_template=prompt_template or None,
         temperature=temperature,
@@ -940,6 +945,25 @@ async def llm_model_probe_models(
     return HTMLResponse(options)
 
 
+@router.get("/llm-models/probe-context-length")
+async def llm_model_probe_context_length(
+    base_url: str = Query(""),
+    model_id: str = Query(""),
+    provider_type: str = Query("ollama"),
+):
+    """Probe the model's training context length so the form can pre-fill num_ctx.
+
+    Only meaningful for Ollama. Returns {"context_length": int|null}.
+    """
+    if provider_type != "ollama" or not base_url or not model_id:
+        return {"context_length": None}
+    try:
+        validate_provider_url(base_url)
+    except HTTPException:
+        return {"context_length": None}
+    return {"context_length": await get_ollama_model_context_length(base_url, model_id)}
+
+
 @router.post("/llm-models")
 async def create_llm_model(
     request: Request,
@@ -952,9 +976,12 @@ async def create_llm_model(
     api_key: str = Form(""),
     model_id: str = Form(...),
     default_temperature: float = Form(0.3),
+    context_length: str = Form(""),
+    default_timeout_seconds: int = Form(120),
     config: str = Form(""),
 ):
     """Create a new LLM model."""
+    parsed_context_length = int(context_length) if context_length.strip() else None
     validate_provider_url(base_url)
 
     parsed_config = None
@@ -973,6 +1000,8 @@ async def create_llm_model(
         api_key=encrypt_api_key(api_key) if api_key else None,
         model_id=model_id,
         default_temperature=default_temperature,
+        context_length=parsed_context_length,
+        default_timeout_seconds=default_timeout_seconds,
         config=parsed_config,
     )
     db.add(llm_model)
@@ -1029,10 +1058,13 @@ async def update_llm_model(
     api_key: str = Form(""),
     model_id_field: str = Form(..., alias="model_id_field"),
     default_temperature: float = Form(0.3),
+    context_length: str = Form(""),
+    default_timeout_seconds: int = Form(120),
     config: str = Form(""),
     is_active: str = Form("off"),
 ):
     """Update an LLM model."""
+    parsed_context_length = int(context_length) if context_length.strip() else None
     validate_provider_url(base_url)
     llm_model = await db.get(LLMModel, model_id)
     if not llm_model:
@@ -1046,6 +1078,8 @@ async def update_llm_model(
         llm_model.api_key = encrypt_api_key(api_key)
     llm_model.model_id = model_id_field
     llm_model.default_temperature = default_temperature
+    llm_model.context_length = parsed_context_length
+    llm_model.default_timeout_seconds = default_timeout_seconds
     llm_model.is_active = is_active == "on"
 
     if config.strip():

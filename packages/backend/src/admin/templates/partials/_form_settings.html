@@ -34,9 +34,10 @@
         <div>
             <label class="block text-sm text-gray-600 mb-1">Timeout (seconds)</label>
             <input type="number" name="timeout_seconds" min="1" max="600"
-                value="{{ workflow.timeout_seconds | default(60) }}"
+                value="{{ workflow.timeout_seconds if workflow and workflow.timeout_seconds is not none else '' }}"
+                placeholder="from LLM model"
                 class="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
-            <p class="text-xs text-gray-400 mt-1">Max execution time before the workflow is cancelled.</p>
+            <p class="text-xs text-gray-400 mt-1">Override the LLM model's default timeout. Leave empty to use the model default.</p>
         </div>
         {% if edit_mode %}
         <div class="flex items-end pb-2">

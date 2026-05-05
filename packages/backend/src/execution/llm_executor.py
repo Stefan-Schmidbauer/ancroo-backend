@@ -34,11 +34,14 @@ def _build_request(llm_model: LLMModel, prompt: str, temperature: float) -> tupl
     headers: dict[str, str] = {"Content-Type": "application/json"}
 
     if api_format == "ollama":
+        options: dict[str, Any] = {"temperature": temperature}
+        if llm_model.context_length is not None:
+            options["num_ctx"] = llm_model.context_length
         payload = {
             "model": llm_model.model_id,
             "prompt": prompt,
             "stream": False,
-            "options": {"temperature": temperature},
+            "options": options,
         }
         response_path = "response"
 
@@ -105,7 +108,7 @@ async def execute_llm_workflow(
     await db.flush()
 
     start_time = datetime.now(timezone.utc)
-    timeout = float(workflow.timeout_seconds)
+    timeout = float(workflow.timeout_seconds or llm_model.default_timeout_seconds)
 
     try:
         url, payload, headers, response_path = _build_request(llm_model, prompt, temperature)
@@ -144,7 +147,7 @@ async def execute_llm_workflow(
 
     except httpx.HTTPError as e:
         error_msg = "Cannot reach LLM service"
-        logger.error("LLM request to %s failed: %s", url, e)
+        logger.error("LLM request to %s failed: %r", url, e)
         finish_log(execution_log, start_time, status="error", error_message=error_msg)
         await db.flush()
         raise LLMExecutionError(error_msg) from e
