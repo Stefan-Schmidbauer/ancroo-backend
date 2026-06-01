@@ -8,7 +8,7 @@
 
 > **Phase 0 (Beta)** — Core functionality works end-to-end, but the backend runs without encryption or authentication by default. Intended for local/trusted networks only. See the [Ancroo Roadmap](https://github.com/ancroo/ancroo/blob/main/ROADMAP.md) for the security path forward.
 
-The backend service that powers the [Ancroo browser extension](https://github.com/ancroo/ancroo-web). It receives text (or audio) from the extension, runs it through an AI workflow, and sends the result back — all self-hosted on your own machine or server.
+The backend service that powers the [Ancroo browser extension (backend mode)](https://github.com/ancroo/ancroo-web-backend). It receives text (or audio) from the extension, runs it through an AI workflow, and sends the result back — all self-hosted on your own machine or server.
 
 ## How It Works
 

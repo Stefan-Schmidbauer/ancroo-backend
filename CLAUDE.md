@@ -74,7 +74,7 @@ Migrations: Alembic, auto-run on startup.
 
 ## Cross-Repo Interfaces
 
-**Consumed by ancroo-web:**
+**Consumed by ancroo-web-backend:**
 - All `/api/v1/` endpoints (REST, fetch-based)
 - CORS configured for `chrome-extension://`
 
