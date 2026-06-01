@@ -6,7 +6,7 @@
 [![Docker](https://img.shields.io/badge/Docker-2496ED?logo=docker&logoColor=white)](https://www.docker.com/)
 [![Status: Beta](https://img.shields.io/badge/Status-Beta-yellow.svg)]()
 
-> **Phase 0 (Beta)** — Core functionality works end-to-end, but the backend runs without encryption or authentication by default. Intended for local/trusted networks only. See the [Ancroo Roadmap](https://github.com/ancroo/ancroo/blob/main/ROADMAP.md) for the security path forward.
+> **Phase 0 (Beta)** — Core functionality is in place for local use, but the backend runs without encryption or authentication by default and is still under active development. Intended for local/trusted networks only. See the [Ancroo Roadmap](https://github.com/ancroo/ancroo/blob/main/ROADMAP.md) for the security path forward.
 
 The backend service that powers the [Ancroo browser extension (backend mode)](https://github.com/ancroo/ancroo-web-backend). It receives text (or audio) from the extension, runs it through an AI workflow, and sends the result back — all self-hosted on your own machine or server.
 
