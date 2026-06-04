@@ -1,0 +1,12 @@
+{
+  "_type": "stt_model",
+  "_version": 1,
+  "name": "Speaches (CUDA GPU)",
+  "provider_type": "whisper_openai_compatible",
+  "base_url": "http://speaches:8000",
+  "model_id": "openai/whisper-large-v3-turbo",
+  "default_language": null,
+  "config": {},
+  "is_active": true,
+  "is_default": false
+}

@@ -96,10 +96,11 @@ bash /path/to/ancroo-backend/install-stack.sh /path/to/ancroo-stack
 
 **Post-installation:**
 
-Example workflows are imported via the admin API — either by the stack installer
-(`ancroo-stack/install.sh`) or manually through the admin GUI (**Admin → Import
-Workflow**).  Required providers (Ollama, Whisper, n8n) are created
-automatically during import.
+The example workflow definitions ship in this repo under [`workflows/`](workflows/)
+(`example-*` directories). They are imported via the admin API — either by the
+stack installer (`ancroo-stack/install.sh`) or manually through the admin GUI
+(**Admin → Import Workflow**).  Required providers (Ollama, Whisper, n8n) are
+created automatically during import.
 
 To add more workflows, use the admin UI at `<server-url>/admin/workflows/new`
 or import a `metadata.json` file:

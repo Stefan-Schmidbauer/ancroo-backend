@@ -1,0 +1,73 @@
+{
+  "name": "Name Formatter \u2192 Ancroo",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "name-formatter",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook-node",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [240, 300],
+      "webhookId": "name-formatter"
+    },
+    {
+      "parameters": {
+        "jsCode": "const input = $input.first().json;\nconst body = input.body || input;\nconst fields = body.fields || {};\n\nconst firstName = (fields.first_name || '').trim();\nconst lastName = (fields.last_name || '').trim();\nconst email = (fields.email || '').trim();\n\nif (!firstName && !lastName) {\n  return [{ json: { text: 'No name provided.' } }];\n}\n\nconst fullName = [firstName, lastName].filter(Boolean).join(' ');\nconst greeting = email\n  ? `Hello ${fullName} (${email})!`\n  : `Hello ${fullName}!`;\n\nreturn [{ json: { text: greeting } }];\n"
+      },
+      "id": "code-node",
+      "name": "Format Name",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ result: JSON.stringify($input.first().json) }) }}",
+        "options": {}
+      },
+      "id": "respond-node",
+      "name": "Respond to Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [680, 300]
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Format Name",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Name": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "tags": [
+    {
+      "name": "ancroo"
+    }
+  ]
+}

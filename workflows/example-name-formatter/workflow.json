@@ -1,0 +1,28 @@
+{
+  "_type": "workflow",
+  "_version": 1,
+  "slug": "name-formatter",
+  "name": "Name Formatter",
+  "description": "Reads name and email fields from a form, sends them to n8n for formatting, and returns a greeting",
+  "workflow_type": "tool",
+  "category_name": "automation",
+  "llm_model_name": null,
+  "stt_model_name": null,
+  "tool_name": "Name Formatter → Ancroo",
+  "output_action": "notification",
+  "demo_url": "example-name-formatter/demo.html",
+  "timeout_seconds": 60,
+  "recipe": {
+    "collect": ["form_fields", "page_context"],
+    "form_fields": [
+      {"name": "first_name", "selector": "#field-first-name, input[name='first_name'], input[name='firstname']"},
+      {"name": "last_name",  "selector": "#field-last-name, input[name='last_name'], input[name='lastname']"},
+      {"name": "email",      "selector": "#field-email, input[name='email'], input[type='email']"}
+    ]
+  },
+  "is_active": true,
+  "permissions": [
+    {"group_name": "standard-users", "permission_level": "execute"},
+    {"group_name": "admin-users", "permission_level": "execute"}
+  ]
+}

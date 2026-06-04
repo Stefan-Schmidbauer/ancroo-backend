@@ -1,0 +1,30 @@
+{
+  "_type": "workflow",
+  "_version": 1,
+  "slug": "contact-form-capture",
+  "name": "Contact Form Capture",
+  "description": "Reads contact form fields from the current page and forwards them to n8n for processing",
+  "workflow_type": "tool",
+  "category_name": "automation",
+  "llm_model_name": null,
+  "stt_model_name": null,
+  "tool_name": "Contact Form → Ancroo",
+  "output_action": "notification",
+  "demo_url": "example-contact-form-capture/demo.html",
+  "timeout_seconds": 60,
+  "recipe": {
+    "collect": ["form_fields", "page_context"],
+    "form_fields": [
+      {"name": "name",     "selector": "#field-name, input[name='name'], input[name='fullname']"},
+      {"name": "email",    "selector": "#field-email, input[name='email'], input[type='email']"},
+      {"name": "subject",  "selector": "#field-subject, input[name='subject']"},
+      {"name": "category", "selector": "#field-category, select[name='category']"},
+      {"name": "message",  "selector": "#field-message, textarea[name='message'], textarea[name='body']"}
+    ]
+  },
+  "is_active": true,
+  "permissions": [
+    {"group_name": "standard-users", "permission_level": "execute"},
+    {"group_name": "admin-users", "permission_level": "execute"}
+  ]
+}

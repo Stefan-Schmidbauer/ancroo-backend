@@ -1,0 +1,31 @@
+{
+  "_type": "workflow",
+  "_version": 1,
+  "slug": "freight-calculator",
+  "name": "Freight Cost Calculator",
+  "description": "Calculates estimated freight cost based on weight, destination zone, and package count",
+  "workflow_type": "tool",
+  "category_name": "automation",
+  "llm_model_name": null,
+  "stt_model_name": null,
+  "tool_name": "Freight Calculator → Ancroo",
+  "output_action": "fill_fields",
+  "demo_url": "example-freight-calculator/demo.html",
+  "timeout_seconds": 60,
+  "recipe": {
+    "collect": ["form_fields", "page_context"],
+    "form_fields": [
+      {"name": "weight_kg", "selector": "#field-weight, input[name='weight']"},
+      {"name": "zone",      "selector": "#field-zone, select[name='zone'], input[name='zone']"},
+      {"name": "packages",  "selector": "#field-packages, input[name='packages']"}
+    ],
+    "output_fields": [
+      {"name": "freight_cost", "selector": "#field-result, input[name='result']"}
+    ]
+  },
+  "is_active": true,
+  "permissions": [
+    {"group_name": "standard-users", "permission_level": "execute"},
+    {"group_name": "admin-users", "permission_level": "execute"}
+  ]
+}

@@ -1,0 +1,22 @@
+{
+  "_type": "workflow",
+  "_version": 1,
+  "slug": "webpage-to-ebook",
+  "name": "Webpage to EPUB",
+  "description": "Convert the current webpage to an EPUB ebook file",
+  "workflow_type": "tool",
+  "category_name": "text",
+  "llm_model_name": null,
+  "stt_model_name": null,
+  "tool_name": "Webpage to EPUB Converter",
+  "output_action": "download_file",
+  "timeout_seconds": 60,
+  "recipe": {
+    "collect": ["page_html"]
+  },
+  "is_active": true,
+  "permissions": [
+    {"group_name": "standard-users", "permission_level": "execute"},
+    {"group_name": "admin-users", "permission_level": "execute"}
+  ]
+}

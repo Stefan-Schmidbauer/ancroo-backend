@@ -1,0 +1,20 @@
+{
+  "_type": "tool",
+  "_version": 1,
+  "name": "HTML to Markdown Converter",
+  "tool_type": "ar_plugin",
+  "endpoint_url": "http://ancroo-runner:8000/convert/html-to-markdown",
+  "http_method": "POST",
+  "headers": {"Content-Type": "application/json"},
+  "payload_template": "{\"html\": \"{{ html or text }}\"}",
+  "response_mapping": "$.result",
+  "timeout": 30,
+  "description": null,
+  "input_schema": null,
+  "output_schema": null,
+  "is_active": true,
+  "source": "imported",
+  "source_id": "custom:html-to-markdown",
+  "n8n_base_url": null,
+  "n8n_flow_id": null
+}

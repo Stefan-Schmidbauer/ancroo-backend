@@ -1,0 +1,26 @@
+{
+  "_type": "workflow",
+  "_version": 1,
+  "slug": "grammar-fix-rocm",
+  "name": "Grammar & Spelling (ROCm)",
+  "description": "Fix grammar and spelling errors in selected text using an LLM (AMD GPU)",
+  "workflow_type": "text_transformation",
+  "category_name": "text",
+  "llm_model_name": "Ollama-ROCm (GPU)",
+  "stt_model_name": null,
+  "tool_name": null,
+  "output_action": "replace_selection",
+  "default_hotkey": "Alt+Shift+G",
+  "demo_url": "example-grammar-fix/demo.html",
+  "timeout_seconds": 60,
+  "recipe": {
+    "collect": ["text_selection"]
+  },
+  "prompt_template": "Improve the grammar and spelling of the following text. Preserve the original meaning, tone, and language (do NOT translate). Return ONLY the corrected text, without explanations or notes.\n\nText:\n{{ text }}\n\nCorrected text:",
+  "temperature": 0.1,
+  "is_active": true,
+  "permissions": [
+    {"group_name": "standard-users", "permission_level": "execute"},
+    {"group_name": "admin-users", "permission_level": "execute"}
+  ]
+}

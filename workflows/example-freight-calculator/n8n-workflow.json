@@ -1,0 +1,73 @@
+{
+  "name": "Freight Calculator \u2192 Ancroo",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "freight-calculator",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook-node",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [240, 300],
+      "webhookId": "freight-calculator"
+    },
+    {
+      "parameters": {
+        "jsCode": "const input = $input.first().json;\nconst body = input.body || input;\nconst fields = body.fields || {};\n\nconst weight = parseFloat(fields.weight_kg) || 0;\nconst zone = (fields.zone || '').toUpperCase();\nconst packages = parseInt(fields.packages) || 1;\n\nconst zoneRates = { A: 2.50, B: 4.00, C: 7.50, D: 12.00 };\nconst rate = zoneRates[zone] || 5.00;\nconst totalCost = (weight * rate * packages).toFixed(2);\n\nreturn [{ json: { freight_cost: totalCost } }];\n"
+      },
+      "id": "code-node",
+      "name": "Calculate Freight",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ result: JSON.stringify($input.first().json) }) }}",
+        "options": {}
+      },
+      "id": "respond-node",
+      "name": "Respond to Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [680, 300]
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Calculate Freight",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Calculate Freight": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "tags": [
+    {
+      "name": "ancroo"
+    }
+  ]
+}

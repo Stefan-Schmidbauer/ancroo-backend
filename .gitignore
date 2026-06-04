@@ -34,3 +34,9 @@ packages/backend/src/BUILD_COMMIT
 
 # Claude Code
 .claude/
+CLAUDE.md
+
+# Workflows: default private, only example-* are public
+workflows/*/
+!workflows/example-*/
+workflows/*.html

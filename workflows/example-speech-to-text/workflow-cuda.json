@@ -1,0 +1,26 @@
+{
+  "_type": "workflow",
+  "_version": 1,
+  "slug": "speech-to-text-cuda",
+  "name": "Speech to Text (CUDA)",
+  "description": "Record audio and transcribe to text using Whisper (NVIDIA GPU)",
+  "workflow_type": "speech_to_text",
+  "category_name": "voice",
+  "llm_model_name": null,
+  "stt_model_name": "Speaches (CUDA GPU)",
+  "tool_name": null,
+  "output_action": "clipboard",
+  "default_hotkey": "Alt+Shift+R",
+  "demo_url": "example-speech-to-text/demo.html",
+  "timeout_seconds": 60,
+  "recipe": {
+    "collect": ["audio"],
+    "audio_accept": "audio/*",
+    "audio_max_size_mb": 50
+  },
+  "is_active": true,
+  "permissions": [
+    {"group_name": "standard-users", "permission_level": "execute"},
+    {"group_name": "admin-users", "permission_level": "execute"}
+  ]
+}

@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Freight Cost Calculator - Ancroo Demo</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f5f5f5; padding: 40px; color: #333; }
+    .container { max-width: 480px; margin: 0 auto; }
+    h1 { font-size: 1.5rem; margin-bottom: 8px; }
+    .subtitle { color: #666; font-size: 0.9rem; margin-bottom: 24px; }
+    .card { background: #fff; border-radius: 12px; padding: 24px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+    .field { margin-bottom: 16px; }
+    .field label { display: block; font-size: 0.85rem; font-weight: 600; color: #555; margin-bottom: 6px; }
+    .field input, .field select {
+      width: 100%; padding: 10px 12px; border: 1px solid #ddd; border-radius: 8px;
+      font-size: 0.95rem; outline: none; transition: border-color 0.2s;
+    }
+    .field input:focus, .field select:focus { border-color: #3b82f6; box-shadow: 0 0 0 3px rgba(59,130,246,0.1); }
+    .divider { border: none; border-top: 2px dashed #e5e5e5; margin: 20px 0; }
+    .result-label { font-size: 0.85rem; font-weight: 600; color: #16a34a; margin-bottom: 6px; display: block; }
+    .result-field {
+      width: 100%; padding: 10px 12px; border: 1px solid #bbf7d0; border-radius: 8px;
+      font-size: 1.1rem; font-weight: 600; color: #166534; background: #f0fdf4; outline: none;
+    }
+    .hint { margin-top: 24px; padding: 12px 16px; background: #eff6ff; border-radius: 8px; font-size: 0.8rem; color: #1e40af; line-height: 1.5; }
+    .zone-info { font-size: 0.75rem; color: #888; margin-top: 4px; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Freight Cost Calculator</h1>
+    <p class="subtitle">Ancroo Workflow Demo &mdash; fill_fields output action</p>
+
+    <div class="card">
+      <div class="field">
+        <label for="field-weight">Weight (kg)</label>
+        <input type="number" id="field-weight" name="weight" min="0" step="0.1" value="25.5" placeholder="e.g. 25.5">
+      </div>
+
+      <div class="field">
+        <label for="field-zone">Destination Zone</label>
+        <select id="field-zone" name="zone">
+          <option value="A">A &mdash; Domestic (2.50 EUR/kg)</option>
+          <option value="B" selected>B &mdash; EU (4.00 EUR/kg)</option>
+          <option value="C">C &mdash; International (7.50 EUR/kg)</option>
+          <option value="D">D &mdash; Overseas (12.00 EUR/kg)</option>
+        </select>
+      </div>
+
+      <div class="field">
+        <label for="field-packages">Package Count</label>
+        <input type="number" id="field-packages" name="packages" min="1" step="1" value="3" placeholder="e.g. 3">
+      </div>
+
+      <hr class="divider">
+
+      <div class="field">
+        <label class="result-label" for="field-result">Estimated Freight Cost (EUR)</label>
+        <input type="text" id="field-result" name="result" class="result-field" readonly placeholder="Calculated by n8n...">
+      </div>
+    </div>
+
+    <div class="hint">
+      <strong>How to use:</strong> Open the Ancroo side panel, select "Freight Cost Calculator",
+      and click Execute. The extension reads the form fields above, sends them to n8n for
+      calculation, and writes the result back into the output field.
+    </div>
+  </div>
+</body>
+</html>

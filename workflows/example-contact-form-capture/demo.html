@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Contact Form Capture - Ancroo Demo</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f5f5f5; padding: 40px; color: #333; }
+    .container { max-width: 480px; margin: 0 auto; }
+    h1 { font-size: 1.5rem; margin-bottom: 8px; }
+    .subtitle { color: #666; font-size: 0.9rem; margin-bottom: 24px; }
+    .card { background: #fff; border-radius: 12px; padding: 24px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+    .field { margin-bottom: 16px; }
+    .field label { display: block; font-size: 0.85rem; font-weight: 600; color: #555; margin-bottom: 6px; }
+    .field input, .field select, .field textarea {
+      width: 100%; padding: 10px 12px; border: 1px solid #ddd; border-radius: 8px;
+      font-size: 0.95rem; outline: none; transition: border-color 0.2s; font-family: inherit;
+    }
+    .field input:focus, .field select:focus, .field textarea:focus { border-color: #3b82f6; box-shadow: 0 0 0 3px rgba(59,130,246,0.1); }
+    .field textarea { resize: vertical; min-height: 100px; }
+    .hint { margin-top: 24px; padding: 12px 16px; background: #eff6ff; border-radius: 8px; font-size: 0.8rem; color: #1e40af; line-height: 1.5; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Contact Form Capture</h1>
+    <p class="subtitle">Ancroo Workflow Demo &mdash; captures form data, forwards to n8n</p>
+
+    <div class="card">
+      <div class="field">
+        <label for="field-name">Name</label>
+        <input type="text" id="field-name" name="name" value="Anna Schmidt" placeholder="e.g. Anna Schmidt">
+      </div>
+
+      <div class="field">
+        <label for="field-email">Email</label>
+        <input type="email" id="field-email" name="email" value="anna@example.com" placeholder="e.g. anna@example.com">
+      </div>
+
+      <div class="field">
+        <label for="field-subject">Subject</label>
+        <input type="text" id="field-subject" name="subject" value="Product inquiry" placeholder="e.g. Product inquiry">
+      </div>
+
+      <div class="field">
+        <label for="field-category">Category</label>
+        <select id="field-category" name="category">
+          <option value="general">General</option>
+          <option value="sales" selected>Sales</option>
+          <option value="support">Support</option>
+          <option value="feedback">Feedback</option>
+        </select>
+      </div>
+
+      <div class="field">
+        <label for="field-message">Message</label>
+        <textarea id="field-message" name="message" placeholder="Your message...">Hello, I'd like to learn more about your services. Could you send me a quote?</textarea>
+      </div>
+    </div>
+
+    <div class="hint">
+      <strong>How to use:</strong> Open the Ancroo side panel, select "Contact Form Capture",
+      and click Execute. The extension reads all form fields above, sends them to n8n
+      for processing, and shows a notification confirming the capture.
+    </div>
+  </div>
+</body>
+</html>

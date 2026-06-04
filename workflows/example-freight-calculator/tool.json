@@ -1,0 +1,20 @@
+{
+  "_type": "tool",
+  "_version": 1,
+  "name": "Freight Calculator → Ancroo",
+  "tool_type": "n8n_webhook",
+  "endpoint_url": "http://n8n:5678/webhook/freight-calculator",
+  "http_method": "POST",
+  "headers": {"Content-Type": "application/json"},
+  "payload_template": "{{ _input | tojson }}",
+  "response_mapping": "$.result",
+  "timeout": 120,
+  "description": null,
+  "input_schema": null,
+  "output_schema": null,
+  "is_active": true,
+  "source": "imported",
+  "source_id": "n8n:freight-calculator",
+  "n8n_base_url": "http://n8n:5678",
+  "n8n_flow_id": null
+}

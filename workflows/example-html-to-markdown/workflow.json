@@ -1,0 +1,23 @@
+{
+  "_type": "workflow",
+  "_version": 1,
+  "slug": "html-to-markdown",
+  "name": "HTML to Markdown",
+  "description": "Convert selected HTML to clean Markdown using Ancroo Runner",
+  "workflow_type": "tool",
+  "category_name": "text",
+  "llm_model_name": null,
+  "stt_model_name": null,
+  "tool_name": "HTML to Markdown Converter",
+  "output_action": "clipboard",
+  "demo_url": "example-html-to-markdown/demo.html",
+  "timeout_seconds": 60,
+  "recipe": {
+    "collect": ["text_selection"]
+  },
+  "is_active": true,
+  "permissions": [
+    {"group_name": "standard-users", "permission_level": "execute"},
+    {"group_name": "admin-users", "permission_level": "execute"}
+  ]
+}

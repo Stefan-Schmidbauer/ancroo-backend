@@ -1,0 +1,13 @@
+{
+  "_type": "llm_model",
+  "_version": 1,
+  "name": "Ollama-CUDA (GPU)",
+  "provider_type": "ollama",
+  "base_url": "http://ollama:11434",
+  "endpoint_execute": "/api/generate",
+  "endpoint_models": "/api/tags",
+  "model_id": "gemma2:2b",
+  "default_temperature": 0.3,
+  "config": {},
+  "is_active": true
+}

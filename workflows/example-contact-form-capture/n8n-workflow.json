@@ -1,0 +1,73 @@
+{
+  "name": "Contact Form \u2192 Ancroo",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "contact-form-capture",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook-node",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [240, 300],
+      "webhookId": "contact-form-capture"
+    },
+    {
+      "parameters": {
+        "jsCode": "const input = $input.first().json;\nconst body = input.body || input;\nconst fields = body.fields || {};\n\nconst name = (fields.name || '').trim();\nconst email = (fields.email || '').trim();\nconst subject = (fields.subject || '').trim();\nconst category = (fields.category || '').trim();\nconst message = (fields.message || '').trim();\n\nconst missing = [];\nif (!name) missing.push('name');\nif (!email) missing.push('email');\nif (!message) missing.push('message');\n\nif (missing.length > 0) {\n  return [{ json: { text: `Missing required fields: ${missing.join(', ')}` } }];\n}\n\nconst summary = [\n  `Contact form received from ${name} <${email}>`,\n  subject ? `Subject: ${subject}` : null,\n  category ? `Category: ${category}` : null,\n  `Message: ${message.substring(0, 100)}${message.length > 100 ? '...' : ''}`\n].filter(Boolean).join('\\n');\n\nreturn [{ json: { text: summary } }];\n"
+      },
+      "id": "code-node",
+      "name": "Process Form",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ result: JSON.stringify($input.first().json) }) }}",
+        "options": {}
+      },
+      "id": "respond-node",
+      "name": "Respond to Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [680, 300]
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Process Form",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Process Form": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "tags": [
+    {
+      "name": "ancroo"
+    }
+  ]
+}
